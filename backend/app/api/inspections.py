@@ -13,6 +13,8 @@ from app.schemas.ocr import OCRResultResponse
 from app.services.ocr_service import OCRService
 from app.services.declaration_service import DeclarationService
 from app.schemas.declaration import DeclarationListResponse
+from app.schemas.compliance import ComplianceResponse
+from app.services.compliance_service import ComplianceService
 
 router = APIRouter()
 
@@ -91,3 +93,13 @@ def extract_declarations(inspection_id: str, db: Session = Depends(get_db)):
 def get_declarations(inspection_id: str, db: Session = Depends(get_db)):
     """Retrieve declarations previously extracted for an inspection."""
     return DeclarationService(db).get_for_inspection(inspection_id)
+
+
+@router.post("/{inspection_id}/compliance", response_model=ComplianceResponse)
+def evaluate_compliance(inspection_id: str, db: Session = Depends(get_db)):
+    return ComplianceService(db).evaluate_for_inspection(inspection_id)
+
+
+@router.get("/{inspection_id}/compliance", response_model=ComplianceResponse)
+def get_compliance(inspection_id: str, db: Session = Depends(get_db)):
+    return ComplianceService(db).get_for_inspection(inspection_id)

@@ -9,6 +9,7 @@ from app.models.evidence import Evidence
 from app.models.report import Report
 from app.models.ocr_result import OCRResult
 from app.models.ocr_text_region import OCRTextRegion
+from app.models.rule_result import RuleResult
 
 __all__ = [
     "User",
@@ -21,4 +22,5 @@ __all__ = [
     "Report",
     "OCRResult",
     "OCRTextRegion",
+    "RuleResult",
 ]

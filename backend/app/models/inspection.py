@@ -41,3 +41,6 @@ class Inspection(Base):
     evidence_items = relationship("Evidence", back_populates="inspection")
     reports = relationship("Report", back_populates="inspection")
     ocr_result = relationship("OCRResult", back_populates="inspection", uselist=False)
+    rule_results = relationship(
+        "RuleResult", back_populates="inspection", cascade="all, delete-orphan"
+    )

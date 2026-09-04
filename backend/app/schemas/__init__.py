@@ -11,6 +11,7 @@ from .ocr import (
     OCRTextRegionResponse,
 )
 from .declaration import DeclarationResponse, DeclarationListResponse
+from .compliance import ComplianceResponse, RuleResultResponse
 
 __all__ = [
     "ProductCreate",
@@ -30,4 +31,6 @@ __all__ = [
     "OCRTextRegionResponse",
     "DeclarationResponse",
     "DeclarationListResponse",
+    "ComplianceResponse",
+    "RuleResultResponse",
 ]

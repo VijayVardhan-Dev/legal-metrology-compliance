@@ -99,6 +99,82 @@ def test_product_name_removes_repeated_quantity_suffix_and_normalized_quotes():
     assert '"' not in by_type(extracted, "BEST_BEFORE").normalized_value
 
 
+def spatial_regions(*items):
+    return [
+        SimpleNamespace(
+            id=str(index),
+            text=text,
+            confidence=confidence,
+            bbox_x=x,
+            bbox_y=y,
+            bbox_width=width,
+            bbox_height=height,
+        )
+        for index, (text, x, y, width, height, confidence) in enumerate(items)
+    ]
+
+
+def test_split_ocr_regions_are_grouped_without_cross_assigning_values():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Surya", 10, 10, 45, 20, 0.98),
+            ("Mustard", 62, 10, 65, 20, 0.97),
+            ("Whole", 134, 10, 45, 20, 0.96),
+            ("Net", 10, 60, 25, 18, 0.95),
+            ("Wt.", 40, 60, 25, 18, 0.94),
+            ("500", 72, 60, 30, 18, 0.93),
+            ("g", 108, 60, 12, 18, 0.92),
+            ("MRP", 10, 110, 35, 18, 0.98),
+            ("100.00", 52, 110, 48, 18, 0.97),
+            ("Batch", 10, 160, 42, 18, 0.98),
+            ("No.", 58, 160, 25, 18, 0.97),
+            ("SMW/0924", 90, 160, 75, 18, 0.96),
+            ("Mfg.", 10, 210, 35, 18, 0.98),
+            ("Date", 52, 210, 35, 18, 0.97),
+            ("15", 94, 210, 18, 18, 0.96),
+            ("SEP", 118, 210, 30, 18, 0.95),
+            ("2024", 154, 210, 42, 18, 0.94),
+            ("Best", 10, 260, 35, 18, 0.98),
+            ("Before", 52, 260, 50, 18, 0.97),
+            ("14", 110, 260, 18, 18, 0.96),
+            ("SEP", 134, 260, 30, 18, 0.95),
+            ("2026", 170, 260, 42, 18, 0.94),
+            ("Manufactured", 10, 320, 85, 18, 0.98),
+            ("by", 102, 320, 18, 18, 0.97),
+            ("M/S.", 10, 345, 35, 18, 0.96),
+            ("Hyderabad", 48, 345, 75, 18, 0.95),
+            ("Food", 126, 345, 35, 18, 0.94),
+            ("Products", 164, 345, 60, 18, 0.93),
+            ("Pvt.", 10, 370, 30, 18, 0.92),
+            ("Ltd.", 44, 370, 28, 18, 0.91),
+            ("Phone", 10, 430, 45, 18, 0.98),
+            ("No.", 62, 430, 25, 18, 0.97),
+            ("7032901785", 94, 430, 80, 18, 0.96),
+            ("Email:", 10, 455, 45, 18, 0.95),
+            ("info@suryamasale.com", 62, 455, 150, 18, 0.94),
+            ("PRODUCT", 10, 500, 70, 18, 0.98),
+            ("OF", 88, 500, 20, 18, 0.97),
+            ("INDIA", 116, 500, 45, 18, 0.96),
+            ("999", 500, 500, 30, 18, 0.99),
+        )
+    )
+    assert by_type(extracted, "PRODUCT_NAME").value == "Surya Mustard Whole"
+    assert by_type(extracted, "NET_QUANTITY").unit == "g"
+    assert by_type(extracted, "NET_QUANTITY").value == "500"
+    assert by_type(extracted, "MRP").value == "100.00"
+    assert by_type(extracted, "MRP").normalized_value == "100.00"
+    assert by_type(extracted, "BATCH_LOT_NUMBER").value == "SMW/0924"
+    assert by_type(extracted, "MANUFACTURING_DATE").value == "15 SEP 2024"
+    assert by_type(extracted, "BEST_BEFORE").value == "14 SEP 2026"
+    assert by_type(extracted, "MANUFACTURER").value.startswith(
+        "M/S. Hyderabad Food Products Pvt. Ltd."
+    )
+    assert by_type(extracted, "COUNTRY_OF_ORIGIN").value == "INDIA"
+    assert by_type(extracted, "CONSUMER_CARE").value == "7032901785 / info@suryamasale.com"
+    assert by_type(extracted, "MRP").ocr_text_region_ids
+    assert by_type(extracted, "MRP").confidence == 0.97
+
+
 def create_test_image():
     file = io.BytesIO()
     Image.new("RGB", (100, 100), color="red").save(file, format="JPEG")
