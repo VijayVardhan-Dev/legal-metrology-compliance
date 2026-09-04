@@ -1,0 +1,2 @@
+[tool.pyrefly]
+search_path = ["backend/venv/Lib/site-packages", "backend"]

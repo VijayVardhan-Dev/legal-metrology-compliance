@@ -1,0 +1,42 @@
+.env
+*.env
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.idea/
+.vscode/
+*.pyc
+
+venv_old/
+test_venv/
+backend_venv/
+backend/venv/
+
+# Environment variables
+.env
+.env.*
+
+# Docker
+*.log
+!*.log.example
+!docker-compose.yml
+
+# AI / ML (optional - exclude large models if desired)
+# ai/models/
+#ai/weights/
+
+# Database (exclude data directory if present)
+# database/data/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+
+# Documentation
+docs/reference.pdf
+# Application storage
+storage/uploads/*
+storage/evidence/*
+storage/reports/*
