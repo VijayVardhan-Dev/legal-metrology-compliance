@@ -10,6 +10,7 @@ from .ocr import (
     OCRTextRegionCreate,
     OCRTextRegionResponse,
 )
+from .declaration import DeclarationResponse, DeclarationListResponse
 
 __all__ = [
     "ProductCreate",
@@ -27,5 +28,6 @@ __all__ = [
     "OCRTextRegion",
     "OCRTextRegionCreate",
     "OCRTextRegionResponse",
+    "DeclarationResponse",
+    "DeclarationListResponse",
 ]
-

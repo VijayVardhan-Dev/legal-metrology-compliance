@@ -30,3 +30,4 @@ class OCRTextRegion(Base):
 
     # Relationships
     ocr_result = relationship("OCRResult", back_populates="text_regions")
+    declarations = relationship("Declaration", back_populates="ocr_text_region")

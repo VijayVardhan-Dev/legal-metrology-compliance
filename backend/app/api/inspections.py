@@ -11,6 +11,8 @@ from app.models.inspection import Inspection
 from app.models.evidence import Evidence
 from app.schemas.ocr import OCRResultResponse
 from app.services.ocr_service import OCRService
+from app.services.declaration_service import DeclarationService
+from app.schemas.declaration import DeclarationListResponse
 
 router = APIRouter()
 
@@ -78,3 +80,14 @@ def get_ocr_results(inspection_id: str, db: Session = Depends(get_db)):
     ocr_service = OCRService(db)
     return ocr_service.get_ocr_result(inspection_id)
 
+
+@router.post("/{inspection_id}/declarations", response_model=DeclarationListResponse)
+def extract_declarations(inspection_id: str, db: Session = Depends(get_db)):
+    """Extract and persist declarations from a completed OCR result."""
+    return DeclarationService(db).extract_for_inspection(inspection_id)
+
+
+@router.get("/{inspection_id}/declarations", response_model=DeclarationListResponse)
+def get_declarations(inspection_id: str, db: Session = Depends(get_db)):
+    """Retrieve declarations previously extracted for an inspection."""
+    return DeclarationService(db).get_for_inspection(inspection_id)
