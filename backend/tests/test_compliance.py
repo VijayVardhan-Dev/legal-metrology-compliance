@@ -287,3 +287,38 @@ def test_category_classification_failure_keeps_fssai_review_required():
     )
     assert result.category == "UNKNOWN"
     assert result.status == "REVIEW_REQUIRED"
+
+
+def test_phase8_rule_confidence_uses_the_lower_declaration_or_ocr_confidence():
+    item = declaration("MRP", "100", declaration_id="decl-8", region_id="region-8")
+    item.confidence = 0.88
+    item.ocr_confidence = 0.96
+
+    assert ComplianceService._rule_confidence([item], []) == 0.88
+
+
+def test_phase8_summary_separates_applicability_counts():
+    results = [
+        SimpleNamespace(status="COMPLIANT", applicability_status="APPLICABLE"),
+        SimpleNamespace(status="COMPLIANT", applicability_status="NOT_APPLICABLE"),
+        SimpleNamespace(status="REVIEW_REQUIRED", applicability_status="APPLICABLE"),
+        SimpleNamespace(status="NON_COMPLIANT", applicability_status="APPLICABLE"),
+    ]
+
+    assert ComplianceService._summary(results, "NON_COMPLIANT") == {
+        "total_rules": 4,
+        "compliant_rules": 1,
+        "non_compliant_rules": 1,
+        "review_required_rules": 1,
+        "applicable_rules": 3,
+        "not_applicable_rules": 1,
+    }
+
+
+def test_phase8_evidence_supports_multiple_ocr_regions():
+    item = declaration("MRP", "100", declaration_id="decl-8", region_id="region-1")
+    item.ocr_text_region_ids = ["region-1", "region-2"]
+
+    evidence = ComplianceService._evidence(item)
+
+    assert evidence["ocr_region_ids"] == ["region-1", "region-2"]

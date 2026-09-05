@@ -234,7 +234,7 @@ class VisualAnalysisService:
         elif x < 0 or y < 0 or x + w > width or y + h > height:
             reasons.append("OCR region is outside the image bounds.")
             partially_cropped = True
-        elif x <= width * 0.02 or y <= height * 0.02 or x + w >= width * 0.98 or y + h >= height * 0.98:
+        elif x <= width * 0.005 or y <= height * 0.005 or x + w >= width * 0.995 or y + h >= height * 0.995:
             near_boundary = True
             reasons.append("OCR region is near an image boundary.")
         relative_text_height = (h / height * 100.0) if h and height else None

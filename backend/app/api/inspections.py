@@ -14,6 +14,7 @@ from app.services.ocr_service import OCRService
 from app.services.declaration_service import DeclarationService
 from app.schemas.declaration import DeclarationListResponse
 from app.schemas.compliance import ComplianceResponse
+from app.schemas.evidence import ComplianceEvidenceResponse
 from app.services.compliance_service import ComplianceService
 from app.schemas.product_category import ProductCategoryResponse
 from app.services.category_service import ProductCategoryService
@@ -105,6 +106,19 @@ def evaluate_compliance(inspection_id: str, db: Session = Depends(get_db)):
 @router.get("/{inspection_id}/compliance", response_model=ComplianceResponse)
 def get_compliance(inspection_id: str, db: Session = Depends(get_db)):
     return ComplianceService(db).get_for_inspection(inspection_id)
+
+
+@router.get("/{inspection_id}/evidence", response_model=list[ComplianceEvidenceResponse])
+def get_compliance_evidence(
+    inspection_id: str,
+    rule: str | None = None,
+    declaration: str | None = None,
+    evidence_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return ComplianceService(db).evidence_for_inspection(
+        inspection_id, rule=rule, declaration=declaration, evidence_type=evidence_type
+    )
 
 
 @router.post("/{inspection_id}/category", response_model=ProductCategoryResponse)

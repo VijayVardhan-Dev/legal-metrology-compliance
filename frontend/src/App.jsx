@@ -8,6 +8,7 @@ function statusClass(status) {
     COMPLIANT: "status status-green",
     NON_COMPLIANT: "status status-red",
     REVIEW_REQUIRED: "status status-yellow",
+    NOT_APPLICABLE: "status status-muted",
     FOUND: "status status-green",
     INCOMPLETE: "status status-yellow",
     GOOD: "status status-green",
@@ -37,6 +38,8 @@ function App() {
   const [category, setCategory] = useState(null);
   const [visualAnalysis, setVisualAnalysis] = useState(null);
   const [compliance, setCompliance] = useState(null);
+  const [selectedEvidence, setSelectedEvidence] = useState([]);
+  const [evidenceRule, setEvidenceRule] = useState("");
   const [activeStep, setActiveStep] = useState("upload");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -48,7 +51,7 @@ function App() {
     ...(category ? ["category"] : []),
     ...(visualAnalysis ? ["visual"] : []),
     ...(compliance ? ["compliance"] : []),
-  ]), [inspectionId, ocr, declarations, category, compliance]);
+  ]), [inspectionId, ocr, declarations, category, visualAnalysis, compliance]);
 
   function chooseFile(nextFile) {
     if (!nextFile || !nextFile.type.startsWith("image/")) {
@@ -58,13 +61,25 @@ function App() {
     setFile(nextFile);
     setPreview(URL.createObjectURL(nextFile));
     setError("");
-    setInspectionId(""); setOcr(null);     setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setActiveStep("upload");
+    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setSelectedEvidence([]); setEvidenceRule(""); setActiveStep("upload");
   }
 
   function reset() {
-    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null);
+    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setSelectedEvidence([]); setEvidenceRule("");
     setActiveStep("upload"); setError("");
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function viewEvidence(ruleId) {
+    if (!inspectionId) return;
+    setError("");
+    try {
+      const items = await request(`/api/v1/inspections/${inspectionId}/evidence?rule=${encodeURIComponent(ruleId)}`);
+      setEvidenceRule(ruleId);
+      setSelectedEvidence(items || []);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   }
 
   async function runInspection() {
@@ -147,8 +162,18 @@ function App() {
               </div>}
             </section>
             <section className="card">
-              <div className="section-heading"><div><p className="eyebrow">PHASE 6</p><h3>Compliance summary</h3></div>{compliance?.overall_status && <span className={statusClass(compliance.overall_status)}>{compliance.overall_status}</span>}</div>
-              {!compliance ? <div className="empty-state">Rule evaluation will appear here after declarations are stored.</div> : <div className="rule-list">{(compliance.results || []).map((result) => <article className="rule-card" key={result.rule_id}><div className="rule-top"><div><strong>{result.rule_id}</strong><span className="legal-reference">{result.legal_reference}</span></div><span className={statusClass(result.status)}>{result.status}</span></div><p>{result.reason}</p><div className="rule-meta"><span>Severity: <strong>{result.severity}</strong></span>{result.evidence?.length > 0 && <span>Evidence: <strong>{result.evidence.length} item{result.evidence.length === 1 ? "" : "s"}</strong></span>}</div>{result.evidence?.length > 0 && <details><summary>View evidence</summary><pre>{JSON.stringify(result.evidence, null, 2)}</pre></details>}</article>)}</div>}
+              <div className="section-heading"><div><p className="eyebrow">PHASE 8</p><h3>Compliance summary</h3></div>{compliance?.overall_status && <span className={statusClass(compliance.overall_status)}>{compliance.overall_status}</span>}</div>
+              {!compliance ? <div className="empty-state">Rule evaluation will appear here after declarations are stored.</div> : <div>
+                <div className="metric-grid compliance-summary">
+                  <div><span>Rules</span><strong>{compliance.total_rules}</strong></div>
+                  <div><span>Compliant</span><strong>{compliance.compliant_rules}</strong></div>
+                  <div><span>Non-compliant</span><strong>{compliance.non_compliant_rules}</strong></div>
+                  <div><span>Review required</span><strong>{compliance.review_required_rules}</strong></div>
+                  <div><span>Confidence</span><strong>{compliance.overall_confidence != null ? `${(compliance.overall_confidence * 100).toFixed(1)}%` : "—"}</strong></div>
+                </div>
+                <div className="rule-list">{(compliance.results || []).map((result) => <article className="rule-card" key={result.rule_id}><div className="rule-top"><div><strong>{result.rule_id}</strong><span className="legal-reference">{result.legal_reference}</span></div><span className={statusClass(result.status)}>{result.status}</span></div><p>{result.reason}</p><div className="rule-meta"><span>Severity: <strong>{result.severity}</strong></span><span>Applicability: <strong>{result.applicability_status || "APPLICABLE"}</strong></span><span>Confidence: <strong>{result.confidence != null ? `${(result.confidence * 100).toFixed(1)}%` : "—"}</strong></span></div>{result.evidence?.length > 0 && <button className="text-button" onClick={() => viewEvidence(result.rule_id)}>View evidence ({result.evidence.length})</button>}</article>)}</div>
+                {selectedEvidence.length > 0 && <div className="evidence-viewer"><div className="section-heading"><div><p className="eyebrow">EVIDENCE</p><h3>{evidenceRule}</h3></div><button className="text-button" onClick={() => setSelectedEvidence([])}>Close</button></div><div className="evidence-image"><img src={`${API_BASE_URL}/api/v1/inspections/${inspectionId}/image`} alt="Original package evidence" />{selectedEvidence.map((item) => item.bbox?.width > 0 && <div className="evidence-box" key={`${item.evidence_id}-${item.ocr_region_id}`} style={{ left: `${(item.bbox.x / item.image_width) * 100}%`, top: `${(item.bbox.y / item.image_height) * 100}%`, width: `${(item.bbox.width / item.image_width) * 100}%`, height: `${(item.bbox.height / item.image_height) * 100}%` }} />)}</div><div className="evidence-details">{selectedEvidence.map((item) => <div key={`${item.evidence_id}-${item.ocr_region_id}`}><strong>{prettyLabel(item.declaration_type)}</strong><span>{item.value || "Value not confidently extracted"} · {item.source_text || "—"}</span><small>OCR confidence: {item.ocr_confidence != null ? `${(item.ocr_confidence * 100).toFixed(1)}%` : "—"} · Region: {item.ocr_region_id}</small></div>)}</div></div>}
+              </div>}
             </section>
           </div>
         </section>

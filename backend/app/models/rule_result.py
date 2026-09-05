@@ -17,6 +17,7 @@ class RuleResult(Base):
         String(36), ForeignKey("inspections.id"), nullable=False, index=True
     )
     rule_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    rule_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     rule_definition_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("rules.id"), nullable=True, index=True
     )
@@ -26,6 +27,11 @@ class RuleResult(Base):
     legal_reference: Mapped[str] = mapped_column(String(255), nullable=False)
     evidence: Mapped[object | None] = mapped_column(JSON, nullable=True)
     declaration_ids: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    applicability_status: Mapped[str] = mapped_column(String(30), nullable=False, default="APPLICABLE")
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    ocr_region_ids: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    visual_finding_ids: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    warnings: Mapped[object | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
