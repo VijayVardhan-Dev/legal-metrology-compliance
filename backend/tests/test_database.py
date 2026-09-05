@@ -55,7 +55,7 @@ def test_tables_exist(engine):
     tables = set(inspector.get_table_names())
     expected = {
         "users", "products", "inspections", "declarations",
-        "rules", "violations", "evidence", "reports",
+        "rules", "violations", "evidence", "reports", "visual_analyses",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 

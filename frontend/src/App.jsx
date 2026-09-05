@@ -1,15 +1,18 @@
 import { useMemo, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["compliance", "Compliance"]];
+const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["visual", "Visual Analysis"], ["compliance", "Compliance"]];
 
 function statusClass(status) {
   return {
     COMPLIANT: "status status-green",
     NON_COMPLIANT: "status status-red",
     REVIEW_REQUIRED: "status status-yellow",
+    NOT_APPLICABLE: "status status-muted",
     FOUND: "status status-green",
     INCOMPLETE: "status status-yellow",
+    GOOD: "status status-green",
+    POOR: "status status-red",
   }[status] || "status status-muted";
 }
 
@@ -98,7 +101,10 @@ function App() {
   const [ocr, setOcr] = useState(null);
   const [declarations, setDeclarations] = useState([]);
   const [category, setCategory] = useState(null);
+  const [visualAnalysis, setVisualAnalysis] = useState(null);
   const [compliance, setCompliance] = useState(null);
+  const [selectedEvidence, setSelectedEvidence] = useState([]);
+  const [evidenceRule, setEvidenceRule] = useState("");
   const [activeStep, setActiveStep] = useState("upload");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -123,8 +129,9 @@ function App() {
     ...(ocr ? ["ocr"] : []),
     ...(declarations.length ? ["declarations"] : []),
     ...(category ? ["category"] : []),
+    ...(visualAnalysis ? ["visual"] : []),
     ...(compliance ? ["compliance"] : []),
-  ]), [inspectionId, ocr, declarations, category, compliance]);
+  ]), [inspectionId, ocr, declarations, category, visualAnalysis, compliance]);
 
   function chooseFile(nextFile) {
     if (!nextFile || !nextFile.type.startsWith("image/")) {
@@ -134,13 +141,25 @@ function App() {
     setFile(nextFile);
     setPreview(URL.createObjectURL(nextFile));
     setError("");
-    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setCompliance(null); setActiveStep("upload");
+    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setSelectedEvidence([]); setEvidenceRule(""); setActiveStep("upload");
   }
 
   function reset() {
-    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setCompliance(null);
+    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setSelectedEvidence([]); setEvidenceRule("");
     setActiveStep("upload"); setError("");
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function viewEvidence(ruleId) {
+    if (!inspectionId) return;
+    setError("");
+    try {
+      const items = await request(`/api/v1/inspections/${inspectionId}/evidence?rule=${encodeURIComponent(ruleId)}`);
+      setEvidenceRule(ruleId);
+      setSelectedEvidence(items || []);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   }
 
   async function runInspection() {
@@ -162,7 +181,9 @@ function App() {
       const declarationResult = await request(`/api/v1/inspections/${created.inspection_id}/declarations`, { method: "POST" });
       setDeclarations(declarationResult.declarations || []); setActiveStep("category");
       const categoryResult = await request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" });
-      setCategory(categoryResult); setActiveStep("compliance");
+      setCategory(categoryResult); setActiveStep("visual");
+      const visualResult = await request(`/api/v1/inspections/${created.inspection_id}/visual-analysis`, { method: "POST" });
+      setVisualAnalysis(visualResult); setActiveStep("compliance");
       const complianceResult = await request(`/api/v1/inspections/${created.inspection_id}/compliance`, { method: "POST" });
       setCompliance(complianceResult);
     } catch (requestError) {
@@ -214,8 +235,32 @@ function App() {
               {declarations.length ? <div className="table-scroll"><table><thead><tr><th>Type</th><th>Value</th><th>Confidence</th><th>Status</th><th>Source text</th></tr></thead><tbody>{declarations.map((item) => <tr key={item.id || `${item.declaration_type}-${item.source_text}`}><td className="type-cell">{prettyLabel(item.declaration_type)}</td><td><strong>{item.value || "Not confidently extracted"}</strong>{item.unit && <small className="unit">{item.unit}</small>}</td><td>{item.confidence != null ? `${(item.confidence * 100).toFixed(1)}%` : "—"}</td><td><span className={statusClass(item.status)}>{item.status}</span></td><td className="source-cell">{item.source_text || "—"}</td></tr>)}</tbody></table></div> : <div className="empty-state">Declarations will appear here after OCR completes.</div>}
             </section>
             <section className="card">
-              <div className="section-heading"><div><p className="eyebrow">PHASE 6</p><h3>Compliance summary</h3></div>{compliance?.overall_status && <span className={statusClass(compliance.overall_status)}>{compliance.overall_status}</span>}</div>
-              {!compliance ? <div className="empty-state">Rule evaluation will appear here after declarations are stored.</div> : <div className="rule-list">{(compliance.results || []).map((result) => <article className="rule-card" key={result.rule_id}><div className="rule-top"><div><strong>{result.rule_id}</strong><span className="legal-reference">{result.legal_reference}</span></div><span className={statusClass(result.status)}>{result.status}</span></div><p>{result.reason}</p><div className="rule-meta"><span>Severity: <strong>{result.severity}</strong></span>{result.evidence?.length > 0 && <span>Evidence: <strong>{result.evidence.length} item{result.evidence.length === 1 ? "" : "s"}</strong></span>}</div>{result.evidence?.length > 0 && <details><summary>View evidence</summary><pre>{JSON.stringify(result.evidence, null, 2)}</pre></details>}</article>)}</div>}
+              <div className="section-heading"><div><p className="eyebrow">PHASE 7</p><h3>Visual analysis</h3></div>{visualAnalysis?.quality_status && <span className={statusClass(visualAnalysis.quality_status)}>{visualAnalysis.quality_status}</span>}</div>
+              {!visualAnalysis ? <div className="empty-state">Image quality and declaration visibility will be assessed after classification.</div> : <div>
+                <div className="metric-grid">
+                  <div><span>Quality score</span><strong>{visualAnalysis.quality_score != null ? `${(Number(visualAnalysis.quality_score) * 100).toFixed(1)}%` : "—"}</strong></div>
+                  <div><span>Resolution</span><strong>{visualAnalysis.image_width && visualAnalysis.image_height ? `${visualAnalysis.image_width} × ${visualAnalysis.image_height}` : "—"}</strong></div>
+                  <div><span>Blur / sharpness</span><strong>{visualAnalysis.metrics?.blur_score != null ? Number(visualAnalysis.metrics.blur_score).toFixed(1) : "—"}</strong></div>
+                  <div><span>Brightness / contrast</span><strong>{visualAnalysis.metrics?.brightness_score != null ? `${Number(visualAnalysis.metrics.brightness_score).toFixed(2)} / ${visualAnalysis.metrics?.contrast_score != null ? Number(visualAnalysis.metrics.contrast_score).toFixed(2) : "—"}` : "—"}</strong></div>
+                </div>
+                <p className="analysis-note">Text size: <strong>APPROXIMATE / SCREEN-BASED ANALYSIS</strong>. Physical millimetre compliance is not inferred without calibration.</p>
+                {visualAnalysis.warnings?.length > 0 && <ul className="warning-list">{visualAnalysis.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
+                {visualAnalysis.declarations?.length > 0 && <div className="table-scroll"><table><thead><tr><th>Declaration</th><th>Visibility</th><th>Text size</th><th>Evidence</th></tr></thead><tbody>{visualAnalysis.declarations.map((item) => <tr key={item.declaration_id || item.id}><td className="type-cell">{prettyLabel(item.declaration_type || item.field_name)}</td><td><span className={statusClass(item.status || item.visibility_flag)}>{prettyLabel(item.status || item.visibility_flag)}</span></td><td>{item.relative_text_height != null ? `${Number(item.relative_text_height).toFixed(2)}% image height` : "—"}</td><td>{item.ocr_region_ids?.length ? item.ocr_region_ids.join(", ") : item.ocr_text_region_id || "—"}</td></tr>)}</tbody></table></div>}
+              </div>}
+            </section>
+            <section className="card">
+              <div className="section-heading"><div><p className="eyebrow">PHASE 8</p><h3>Compliance summary</h3></div>{compliance?.overall_status && <span className={statusClass(compliance.overall_status)}>{compliance.overall_status}</span>}</div>
+              {!compliance ? <div className="empty-state">Rule evaluation will appear here after declarations are stored.</div> : <div>
+                <div className="metric-grid compliance-summary">
+                  <div><span>Rules</span><strong>{compliance.total_rules}</strong></div>
+                  <div><span>Compliant</span><strong>{compliance.compliant_rules}</strong></div>
+                  <div><span>Non-compliant</span><strong>{compliance.non_compliant_rules}</strong></div>
+                  <div><span>Review required</span><strong>{compliance.review_required_rules}</strong></div>
+                  <div><span>Confidence</span><strong>{compliance.overall_confidence != null ? `${(compliance.overall_confidence * 100).toFixed(1)}%` : "—"}</strong></div>
+                </div>
+                <div className="rule-list">{(compliance.results || []).map((result) => <article className="rule-card" key={result.rule_id}><div className="rule-top"><div><strong>{result.rule_id}</strong><span className="legal-reference">{result.legal_reference}</span></div><span className={statusClass(result.status)}>{result.status}</span></div><p>{result.reason}</p><div className="rule-meta"><span>Severity: <strong>{result.severity}</strong></span><span>Applicability: <strong>{result.applicability_status || "APPLICABLE"}</strong></span><span>Confidence: <strong>{result.confidence != null ? `${(result.confidence * 100).toFixed(1)}%` : "—"}</strong></span></div>{result.evidence?.length > 0 && <button className="text-button" onClick={() => viewEvidence(result.rule_id)}>View evidence ({result.evidence.length})</button>}</article>)}</div>
+                {selectedEvidence.length > 0 && <div className="evidence-viewer"><div className="section-heading"><div><p className="eyebrow">EVIDENCE</p><h3>{evidenceRule}</h3></div><button className="text-button" onClick={() => setSelectedEvidence([])}>Close</button></div><div className="evidence-image"><img src={`${API_BASE_URL}/api/v1/inspections/${inspectionId}/image`} alt="Original package evidence" />{selectedEvidence.map((item) => item.bbox?.width > 0 && <div className="evidence-box" key={`${item.evidence_id}-${item.ocr_region_id}`} style={{ left: `${(item.bbox.x / item.image_width) * 100}%`, top: `${(item.bbox.y / item.image_height) * 100}%`, width: `${(item.bbox.width / item.image_width) * 100}%`, height: `${(item.bbox.height / item.image_height) * 100}%` }} />)}</div><div className="evidence-details">{selectedEvidence.map((item) => <div key={`${item.evidence_id}-${item.ocr_region_id}`}><strong>{prettyLabel(item.declaration_type)}</strong><span>{item.value || "Value not confidently extracted"} · {item.source_text || "—"}</span><small>OCR confidence: {item.ocr_confidence != null ? `${(item.ocr_confidence * 100).toFixed(1)}%` : "—"} · Region: {item.ocr_region_id}</small></div>)}</div></div>}
+              </div>}
             </section>
           </div>
         </section>

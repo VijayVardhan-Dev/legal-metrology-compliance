@@ -53,6 +53,11 @@ pytest tests/ -v
 | POST   | `/api/v1/inspections`                  | Upload image & create inspection    |
 | GET    | `/api/v1/inspections/{id}`             | Retrieve inspection details         |
 | GET    | `/api/v1/inspections/{id}/image`       | Retrieve uploaded image             |
+| POST | `/api/v1/inspections/{id}/visual-analysis` | Analyze image quality and declaration visibility |
+| GET  | `/api/v1/inspections/{id}/visual-analysis` | Retrieve visual analysis results |
+| POST | `/api/v1/inspections/{id}/compliance` | Evaluate traceable compliance results |
+| GET  | `/api/v1/inspections/{id}/compliance` | Retrieve compliance summary and rule results |
+| GET  | `/api/v1/inspections/{id}/evidence` | Retrieve original-image evidence, optionally filtered by `rule`, `declaration`, or `evidence_type` |
 
 ### API Docs
 
@@ -70,6 +75,8 @@ Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 | violations     | Rule failures per inspection            |
 | evidence       | Image files and bounding boxes          |
 | reports        | Generated PDF reports per inspection    |
+| visual_analyses | Image quality, OCR-region visibility, and visual evidence |
+| compliance_runs | Idempotent inspection-level compliance summaries and evaluation metadata |
 
 ### Project Structure
 

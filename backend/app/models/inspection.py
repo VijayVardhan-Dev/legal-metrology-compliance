@@ -48,3 +48,11 @@ class Inspection(Base):
         "ProductCategory", back_populates="inspection", uselist=False,
         cascade="all, delete-orphan",
     )
+    visual_analysis = relationship(
+        "VisualAnalysis", back_populates="inspection", uselist=False,
+        cascade="all, delete-orphan",
+    )
+    compliance_run = relationship(
+        "ComplianceRun", back_populates="inspection", uselist=False,
+        cascade="all, delete-orphan",
+    )

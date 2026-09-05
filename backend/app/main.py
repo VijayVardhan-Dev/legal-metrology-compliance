@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.api.health import router as health_router
 from app.api.auth import router as auth_router
 from app.api.inspections import router as inspections_router
+from app.api.visual_analysis import router as visual_analysis_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -50,6 +51,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(health_router, prefix="/api/v1", tags=["Health"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(inspections_router, prefix="/api/v1/inspections", tags=["Inspections"])
+app.include_router(visual_analysis_router, prefix="/api/v1/inspections", tags=["Visual analysis"])
 
 
 # ---------------------------------------------------------------------------
