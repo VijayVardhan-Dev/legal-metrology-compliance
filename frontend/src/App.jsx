@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["compliance", "Compliance"]];
+const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["visual", "Visual Analysis"], ["compliance", "Compliance"]];
 
 function statusClass(status) {
   return {
@@ -10,6 +10,8 @@ function statusClass(status) {
     REVIEW_REQUIRED: "status status-yellow",
     FOUND: "status status-green",
     INCOMPLETE: "status status-yellow",
+    GOOD: "status status-green",
+    POOR: "status status-red",
   }[status] || "status status-muted";
 }
 
@@ -33,6 +35,7 @@ function App() {
   const [ocr, setOcr] = useState(null);
   const [declarations, setDeclarations] = useState([]);
   const [category, setCategory] = useState(null);
+  const [visualAnalysis, setVisualAnalysis] = useState(null);
   const [compliance, setCompliance] = useState(null);
   const [activeStep, setActiveStep] = useState("upload");
   const [running, setRunning] = useState(false);
@@ -43,6 +46,7 @@ function App() {
     ...(ocr ? ["ocr"] : []),
     ...(declarations.length ? ["declarations"] : []),
     ...(category ? ["category"] : []),
+    ...(visualAnalysis ? ["visual"] : []),
     ...(compliance ? ["compliance"] : []),
   ]), [inspectionId, ocr, declarations, category, compliance]);
 
@@ -54,11 +58,11 @@ function App() {
     setFile(nextFile);
     setPreview(URL.createObjectURL(nextFile));
     setError("");
-    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setCompliance(null); setActiveStep("upload");
+    setInspectionId(""); setOcr(null);     setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setActiveStep("upload");
   }
 
   function reset() {
-    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setCompliance(null);
+    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null);
     setActiveStep("upload"); setError("");
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -78,7 +82,9 @@ function App() {
       const declarationResult = await request(`/api/v1/inspections/${created.inspection_id}/declarations`, { method: "POST" });
       setDeclarations(declarationResult.declarations || []); setActiveStep("category");
       const categoryResult = await request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" });
-      setCategory(categoryResult); setActiveStep("compliance");
+      setCategory(categoryResult); setActiveStep("visual");
+      const visualResult = await request(`/api/v1/inspections/${created.inspection_id}/visual-analysis`, { method: "POST" });
+      setVisualAnalysis(visualResult); setActiveStep("compliance");
       const complianceResult = await request(`/api/v1/inspections/${created.inspection_id}/compliance`, { method: "POST" });
       setCompliance(complianceResult);
     } catch (requestError) {
@@ -125,6 +131,20 @@ function App() {
             <section className="card">
               <div className="section-heading"><div><p className="eyebrow">PHASE 5</p><h3>Extracted declarations</h3></div><span className="count-badge">{declarations.length}</span></div>
               {declarations.length ? <div className="table-scroll"><table><thead><tr><th>Type</th><th>Value</th><th>Confidence</th><th>Status</th><th>Source text</th></tr></thead><tbody>{declarations.map((item) => <tr key={item.id || `${item.declaration_type}-${item.source_text}`}><td className="type-cell">{prettyLabel(item.declaration_type)}</td><td><strong>{item.value || "Not confidently extracted"}</strong>{item.unit && <small className="unit">{item.unit}</small>}</td><td>{item.confidence != null ? `${(item.confidence * 100).toFixed(1)}%` : "—"}</td><td><span className={statusClass(item.status)}>{item.status}</span></td><td className="source-cell">{item.source_text || "—"}</td></tr>)}</tbody></table></div> : <div className="empty-state">Declarations will appear here after OCR completes.</div>}
+            </section>
+            <section className="card">
+              <div className="section-heading"><div><p className="eyebrow">PHASE 7</p><h3>Visual analysis</h3></div>{visualAnalysis?.quality_status && <span className={statusClass(visualAnalysis.quality_status)}>{visualAnalysis.quality_status}</span>}</div>
+              {!visualAnalysis ? <div className="empty-state">Image quality and declaration visibility will be assessed after classification.</div> : <div>
+                <div className="metric-grid">
+                  <div><span>Quality score</span><strong>{visualAnalysis.quality_score != null ? `${(Number(visualAnalysis.quality_score) * 100).toFixed(1)}%` : "—"}</strong></div>
+                  <div><span>Resolution</span><strong>{visualAnalysis.image_width && visualAnalysis.image_height ? `${visualAnalysis.image_width} × ${visualAnalysis.image_height}` : "—"}</strong></div>
+                  <div><span>Blur / sharpness</span><strong>{visualAnalysis.metrics?.blur_score != null ? Number(visualAnalysis.metrics.blur_score).toFixed(1) : "—"}</strong></div>
+                  <div><span>Brightness / contrast</span><strong>{visualAnalysis.metrics?.brightness_score != null ? `${Number(visualAnalysis.metrics.brightness_score).toFixed(2)} / ${visualAnalysis.metrics?.contrast_score != null ? Number(visualAnalysis.metrics.contrast_score).toFixed(2) : "—"}` : "—"}</strong></div>
+                </div>
+                <p className="analysis-note">Text size: <strong>APPROXIMATE / SCREEN-BASED ANALYSIS</strong>. Physical millimetre compliance is not inferred without calibration.</p>
+                {visualAnalysis.warnings?.length > 0 && <ul className="warning-list">{visualAnalysis.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
+                {visualAnalysis.declarations?.length > 0 && <div className="table-scroll"><table><thead><tr><th>Declaration</th><th>Visibility</th><th>Text size</th><th>Evidence</th></tr></thead><tbody>{visualAnalysis.declarations.map((item) => <tr key={item.declaration_id || item.id}><td className="type-cell">{prettyLabel(item.declaration_type || item.field_name)}</td><td><span className={statusClass(item.status || item.visibility_flag)}>{prettyLabel(item.status || item.visibility_flag)}</span></td><td>{item.relative_text_height != null ? `${Number(item.relative_text_height).toFixed(2)}% image height` : "—"}</td><td>{item.ocr_region_ids?.length ? item.ocr_region_ids.join(", ") : item.ocr_text_region_id || "—"}</td></tr>)}</tbody></table></div>}
+              </div>}
             </section>
             <section className="card">
               <div className="section-heading"><div><p className="eyebrow">PHASE 6</p><h3>Compliance summary</h3></div>{compliance?.overall_status && <span className={statusClass(compliance.overall_status)}>{compliance.overall_status}</span>}</div>
