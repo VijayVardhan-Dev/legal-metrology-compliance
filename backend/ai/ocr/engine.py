@@ -9,6 +9,7 @@ from typing import Dict, Any
 # Disabling PIR and oneDNN/mkldnn forces the reliable legacy CPU execution path.
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
+os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
 logger = logging.getLogger(__name__)
 
@@ -19,20 +20,20 @@ _ocr_engine = None
 def get_ocr_engine():
     global _ocr_engine
     if _ocr_engine is None:
-        logger.info("Initializing PaddleOCR engine (v3.x PP-OCRv4 server)...")
+        logger.info("Initializing PaddleOCR engine (v3.x mobile models)...")
         from paddleocr import PaddleOCR
 
         # PaddleOCR 3.x constructor:
         #   - No show_log / use_angle_cls (v2 args removed)
         #   - use_textline_orientation replaces use_angle_cls
-        #   - Explicitly use PP-OCRv4 server models (mobile models crash on Windows oneDNN)
-        #   - Disable doc orientation/unwarping to skip loading unused models
+        #   - Use mobile models so local CPU startup is practical
+        #   - Disable orientation and unwarping models for package-label OCR
         _ocr_engine = PaddleOCR(
-            use_textline_orientation=True,
+            use_textline_orientation=False,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
-            text_detection_model_name="PP-OCRv4_server_det",
-            text_recognition_model_name="PP-OCRv4_server_rec",
+            text_detection_model_name="PP-OCRv5_mobile_det",
+            text_recognition_model_name="PP-OCRv5_mobile_rec",
         )
         logger.info("PaddleOCR engine initialized.")
     return _ocr_engine

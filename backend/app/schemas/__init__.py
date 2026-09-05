@@ -13,6 +13,7 @@ from .ocr import (
 from .declaration import DeclarationResponse, DeclarationListResponse
 from .compliance import ComplianceResponse, RuleResultResponse
 from .product_category import ProductCategoryResponse
+from .auth import AuthCredentials, AuthResponse, AuthUserResponse, RegisterRequest
 
 __all__ = [
     "ProductCreate",
@@ -35,4 +36,8 @@ __all__ = [
     "ComplianceResponse",
     "RuleResultResponse",
     "ProductCategoryResponse",
+    "AuthCredentials",
+    "AuthResponse",
+    "AuthUserResponse",
+    "RegisterRequest",
 ]

@@ -10,6 +10,6 @@ alembic==1.14.0
 psycopg[binary]==3.2.3
 python-multipart==0.0.12
 Pillow==11.0.0
-paddlepaddle==2.6.2
+paddlepaddle==3.3.1
 paddleocr
 opencv-python

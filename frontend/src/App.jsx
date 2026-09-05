@@ -17,8 +17,72 @@ function prettyLabel(value) {
   return String(value || "").replaceAll("_", " ");
 }
 
+function LoginPage({ onLogin }) {
+  const [mode, setMode] = useState("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    const email = username.trim().toLowerCase();
+    if (mode === "register" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await request(`/api/v1/auth/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      onLogin(rememberMe, result.user);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-visual">
+        <div className="login-visual-top"><div className="brand-mark">LM</div><span>COMPLIANCE CONTROL</span></div>
+        <div className="login-visual-copy"><p className="eyebrow">LEGAL METROLOGY / INDIA</p><h1>Make every label<br /><em>count.</em></h1><p>Inspect packaged commodities with a clear chain from evidence to decision.</p></div>
+        <div className="login-signal"><span className="signal-dot" /> OCR pipeline ready <strong>01</strong></div>
+      </section>
+      <section className="login-panel">
+        <div className="login-form-wrap">
+          <p className="eyebrow">INSPECTOR ACCESS</p>
+          <h2>{mode === "login" ? "Welcome back" : "Create account"}</h2>
+          <p className="login-intro">{mode === "login" ? "Sign in to open your inspection workbench." : "Create an account to start inspecting package labels."}</p>
+          <form className="login-form" onSubmit={submit}>
+            <label htmlFor="username">Email address<input id="username" type="email" autoComplete="email" value={username} onChange={(event) => { setUsername(event.target.value); setError(""); }} placeholder="you@example.com" required /></label>
+            <label htmlFor="password">Password<div className="password-input"><input id="password" type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(event) => { setPassword(event.target.value); setError(""); }} placeholder="At least 8 characters" minLength="8" required /><button type="button" className="visibility-button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button></div></label>
+            {mode === "register" && <label htmlFor="confirm-password">Confirm password<input id="confirm-password" type={showPassword ? "text" : "password"} autoComplete="new-password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError(""); }} placeholder="Re-enter your password" minLength="8" required /></label>}
+            <div className="login-options"><label className="checkbox-label"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /> Remember me</label>{mode === "login" && <button type="button" className="forgot-button" onClick={() => setError("Password recovery is not configured yet.")}>Forgot password?</button>}</div>
+            {error && <div className="login-error" role="alert">{error}</div>}
+            <button className="login-submit" type="submit" disabled={submitting}>{submitting ? "Please wait..." : mode === "login" ? "Sign in" : "Create account"} <span>→</span></button>
+          </form>
+          <p className="login-switch">{mode === "login" ? "New to the workbench?" : "Already have an account?"} <button type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}> {mode === "login" ? "Create an account" : "Sign in"}</button></p>
+          <p className="login-footer">Protected inspection workspace <span>•</span> v1.0</p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, options);
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    signal: options.signal || AbortSignal.timeout(180000),
+  });
   let body = null;
   try { body = await response.json(); } catch { body = null; }
   if (!response.ok) throw new Error(body?.detail || `Request failed (${response.status})`);
@@ -26,6 +90,7 @@ async function request(path, options = {}) {
 }
 
 function App() {
+  const [authenticated, setAuthenticated] = useState(() => Boolean(localStorage.getItem("lm_user_email")));
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
@@ -37,6 +102,21 @@ function App() {
   const [activeStep, setActiveStep] = useState("upload");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+
+  function login(rememberMe, user) {
+    if (rememberMe) {
+      localStorage.setItem("lm_authenticated", "true");
+      localStorage.setItem("lm_user_email", user.email);
+    }
+    setAuthenticated(true);
+  }
+
+  function logout() {
+    localStorage.removeItem("lm_authenticated");
+    localStorage.removeItem("lm_user_email");
+    setAuthenticated(false);
+    reset();
+  }
 
   const completedSteps = useMemo(() => new Set([
     ...(inspectionId ? ["upload"] : []),
@@ -74,7 +154,11 @@ function App() {
       const created = await request("/api/v1/inspections", { method: "POST", body: form });
       setInspectionId(created.inspection_id); setActiveStep("ocr");
       const ocrResult = await request(`/api/v1/inspections/${created.inspection_id}/ocr`, { method: "POST" });
-      setOcr(ocrResult); setActiveStep("declarations");
+      setOcr(ocrResult);
+      if (ocrResult.status !== "COMPLETED") {
+        throw new Error(ocrResult.error_message || "OCR processing failed. Check the backend logs for details.");
+      }
+      setActiveStep("declarations");
       const declarationResult = await request(`/api/v1/inspections/${created.inspection_id}/declarations`, { method: "POST" });
       setDeclarations(declarationResult.declarations || []); setActiveStep("category");
       const categoryResult = await request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" });
@@ -88,12 +172,15 @@ function App() {
     }
   }
 
+  if (!authenticated) return <LoginPage onLogin={login} />;
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-mark">LM</div>
         <div><div className="eyebrow">INSPECTION WORKBENCH</div><h1>Legal Metrology Compliance</h1></div>
         <div className="api-indicator"><span /> API {API_BASE_URL}</div>
+        <button className="logout-button" onClick={logout}>Sign out</button>
       </header>
       <main className="page">
         <section className="hero">
