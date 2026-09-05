@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import os
@@ -18,8 +20,38 @@ from app.schemas.evidence import ComplianceEvidenceResponse
 from app.services.compliance_service import ComplianceService
 from app.schemas.product_category import ProductCategoryResponse
 from app.services.category_service import ProductCategoryService
+from app.schemas.history import InspectionHistoryResponse
+from app.services.dashboard_service import DashboardService
 
 router = APIRouter()
+
+@router.get("", response_model=InspectionHistoryResponse)
+def list_inspections(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status: str | None = Query(default=None),
+    compliance_status: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    subcategory: str | None = Query(default=None),
+    product_name: str | None = Query(default=None),
+    report_number: str | None = Query(default=None),
+    date_from: datetime | None = Query(default=None, description="Inclusive ISO 8601 timestamp"),
+    date_to: datetime | None = Query(default=None, description="Inclusive ISO 8601 timestamp"),
+    minimum_confidence: float | None = Query(default=None, ge=0, le=1),
+    maximum_confidence: float | None = Query(default=None, ge=0, le=1),
+    search: str | None = Query(default=None),
+    sort_by: str = Query(default="created_at"),
+    sort_order: str = Query(default="desc"),
+    db: Session = Depends(get_db),
+):
+    return DashboardService(db).history(
+        page=page, page_size=page_size, status=status,
+        compliance_status=compliance_status, category=category,
+        subcategory=subcategory, product_name=product_name,
+        report_number=report_number, date_from=date_from, date_to=date_to,
+        minimum_confidence=minimum_confidence, maximum_confidence=maximum_confidence,
+        search=search, sort_by=sort_by, sort_order=sort_order,
+    )
 
 @router.post("", response_model=InspectionUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_inspection_image(
