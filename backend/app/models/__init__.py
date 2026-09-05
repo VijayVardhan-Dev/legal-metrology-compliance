@@ -11,6 +11,7 @@ from app.models.ocr_result import OCRResult
 from app.models.ocr_text_region import OCRTextRegion
 from app.models.rule_result import RuleResult
 from app.models.product_category import ProductCategory
+from app.models.visual_analysis import VisualAnalysis
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "OCRTextRegion",
     "RuleResult",
     "ProductCategory",
+    "VisualAnalysis",
 ]

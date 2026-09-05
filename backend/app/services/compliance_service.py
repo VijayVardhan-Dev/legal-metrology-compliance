@@ -9,6 +9,7 @@ from app.models.inspection import Inspection
 from app.models.rule import Rule
 from app.models.rule_result import RuleResult
 from app.models.product_category import ProductCategory
+from app.models.visual_analysis import VisualAnalysis
 from app.rules.base import RuleDefinition
 from app.rules.registry import MVP_RULES
 from app.schemas.compliance import ComplianceResponse, RuleResultResponse
@@ -352,6 +353,13 @@ class ComplianceService:
             )
         self.db.add_all(persisted)
         overall_status = self._overall_status([item.status for item in persisted])
+        visual = self.db.query(VisualAnalysis).filter(
+            VisualAnalysis.inspection_id == inspection_id
+        ).first()
+        # Visual analysis is advisory: it can require human review, but must
+        # never hide or downgrade an existing legal-rule non-compliance.
+        if visual and visual.status == "REVIEW_REQUIRED" and overall_status == "COMPLIANT":
+            overall_status = "REVIEW_REQUIRED"
         inspection.status = overall_status
         self.db.commit()
         results = self.db.query(RuleResult).filter(
@@ -371,9 +379,15 @@ class ComplianceService:
         results = self.db.query(RuleResult).filter(
             RuleResult.inspection_id == inspection_id
         ).order_by(RuleResult.rule_id).all()
+        visual = self.db.query(VisualAnalysis).filter(
+            VisualAnalysis.inspection_id == inspection_id
+        ).first()
+        overall_status = self._overall_status([item.status for item in results])
+        if visual and visual.status == "REVIEW_REQUIRED" and overall_status == "COMPLIANT":
+            overall_status = "REVIEW_REQUIRED"
         return ComplianceResponse(
             inspection_id=inspection_id,
-            overall_status=self._overall_status([item.status for item in results]),
+            overall_status=overall_status,
             results=[RuleResultResponse.model_validate(result) for result in results],
         )
 
