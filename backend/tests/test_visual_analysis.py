@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import numpy as np
+
 from app.services.visual_analysis_service import VisualAnalysisService
 
 
@@ -7,6 +9,15 @@ def test_quality_score_is_bounded_and_low_for_small_blurry_images():
     score = VisualAnalysisService._quality_score(120, 120, 2.0, 0.0)
     assert 0 <= score <= 1
     assert score < 0.60
+
+
+def test_sharpness_accepts_float32_grayscale_images():
+    gray = np.zeros((16, 16), dtype=np.float32)
+    gray[4:12, 4:12] = 255
+
+    score = VisualAnalysisService._sharpness(gray)
+
+    assert score >= 0.0
 
 
 def test_visibility_requires_normalized_ocr_region():

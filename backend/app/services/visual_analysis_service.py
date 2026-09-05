@@ -200,7 +200,8 @@ class VisualAnalysisService:
     @staticmethod
     def _sharpness(gray: np.ndarray) -> float:
         if cv2 is not None:
-            return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+            # OpenCV does not support converting float32 input to float64 here.
+            return float(cv2.Laplacian(gray.astype(np.float64), cv2.CV_64F).var())
         # A finite-difference fallback keeps the service usable without OpenCV.
         return float(np.var(np.diff(gray, axis=0)) + np.var(np.diff(gray, axis=1)))
 
