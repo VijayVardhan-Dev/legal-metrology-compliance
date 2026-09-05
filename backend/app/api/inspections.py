@@ -15,6 +15,8 @@ from app.services.declaration_service import DeclarationService
 from app.schemas.declaration import DeclarationListResponse
 from app.schemas.compliance import ComplianceResponse
 from app.services.compliance_service import ComplianceService
+from app.schemas.product_category import ProductCategoryResponse
+from app.services.category_service import ProductCategoryService
 
 router = APIRouter()
 
@@ -103,3 +105,13 @@ def evaluate_compliance(inspection_id: str, db: Session = Depends(get_db)):
 @router.get("/{inspection_id}/compliance", response_model=ComplianceResponse)
 def get_compliance(inspection_id: str, db: Session = Depends(get_db)):
     return ComplianceService(db).get_for_inspection(inspection_id)
+
+
+@router.post("/{inspection_id}/category", response_model=ProductCategoryResponse)
+def classify_category(inspection_id: str, db: Session = Depends(get_db)):
+    return ProductCategoryService(db).classify_for_inspection(inspection_id)
+
+
+@router.get("/{inspection_id}/category", response_model=ProductCategoryResponse)
+def get_category(inspection_id: str, db: Session = Depends(get_db)):
+    return ProductCategoryService(db).get_for_inspection(inspection_id)

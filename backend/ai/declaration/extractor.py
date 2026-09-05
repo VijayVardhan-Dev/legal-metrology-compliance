@@ -175,6 +175,8 @@ class DeclarationExtractor:
             return self._spatial_date(regions, index, threshold, "MANUFACTURING_DATE")
         if compact in {"best", "bestbefore"}:
             return self._spatial_date(regions, index, threshold, "BEST_BEFORE")
+        if compact in {"use", "useby", "expiry", "expirydate", "exp", "expdate"}:
+            return self._spatial_date(regions, index, threshold, "USE_BY")
         if compact in {"net", "netwt", "netweight"}:
             return self._spatial_quantity(regions, index, threshold)
         if compact in {"product", "of"}:
@@ -243,8 +245,16 @@ class DeclarationExtractor:
         year = next((item for item in numbers if len(str(getattr(item, "text", "")).strip()) == 4), None)
         if not month or not day or not year:
             return self._make_incomplete(declaration_type, regions[index])
+        label_items = [
+            item for item in candidates
+            if compact_text(str(getattr(item, "text", ""))) in {
+                "best", "before", "bestbefore", "use", "by", "useby",
+                "expiry", "expirydate", "exp", "expdate", "date",
+            }
+            and self._same_line(regions[index], item)
+        ]
         source, items = self._source_and_items(
-            regions, index, [day, month, year]
+            regions, index, label_items + [day, month, year]
         )
         value = " ".join(
             [str(getattr(day, "text", "")).strip(),
@@ -269,13 +279,31 @@ class DeclarationExtractor:
         number = next((item for item in candidates if re.fullmatch(
             r"\d+(?:[.,]\d+)?", str(getattr(item, "text", "")).strip()
         )), None)
-        unit = next(
-            (item for item in candidates if normalize_unit(str(getattr(item, "text", "")).strip()) in {"g", "kg", "ml", "L"}),
-            None,
-        )
         if not number:
             return self._make_incomplete("NET_QUANTITY", regions[index])
-        items = [number] + ([unit] if unit else [])
+        number_index = regions.index(number)
+        number_x, number_y, number_w, number_h = self._bbox(number)
+        unit_candidates = [
+            item for item in candidates
+            if normalize_unit(str(getattr(item, "text", "")).strip())
+            in {"g", "kg", "ml", "L"}
+            and self._unit_is_adjacent_to_number(
+                number, item, threshold, regions.index(item), number_index
+            )
+        ]
+        unit = min(
+            unit_candidates,
+            key=lambda item: self._distance(number, item),
+            default=None,
+        )
+        label_items = [
+            item for item in candidates
+            if compact_text(str(getattr(item, "text", ""))) in {
+                "wt", "weight", "quantity", "qty"
+            }
+            and regions.index(item) < number_index
+        ]
+        items = label_items + [number] + ([unit] if unit else [])
         source, selected = self._source_and_items(regions, index, items)
         declaration = ExtractedDeclaration(
             declaration_type="NET_QUANTITY",
@@ -290,6 +318,23 @@ class DeclarationExtractor:
             ocr_text_region_ids=[self._region_id(item) for item in selected],
         )
         return declaration, {self._region_id(item) for item in selected}
+
+    def _unit_is_adjacent_to_number(
+        self, number, unit, threshold, unit_index, number_index
+    ):
+        nx, ny, nw, nh = self._bbox(number)
+        ux, uy, uw, uh = self._bbox(unit)
+        if not any((nw, nh, uw, uh)):
+            return True
+        same_line = abs((uy + uh / 2) - (ny + nh / 2)) <= max(nh, uh, 20)
+        right_of_number = ux >= nx + nw and ux - (nx + nw) <= threshold
+        below_number = uy >= ny + nh and uy - (ny + nh) <= threshold and abs(ux - nx) <= threshold
+        return (same_line and right_of_number) or below_number
+
+    def _same_line(self, first, second):
+        _, ay, _, ah = self._bbox(first)
+        _, by, _, bh = self._bbox(second)
+        return abs((by + bh / 2) - (ay + ah / 2)) <= max(ah, bh, 20)
 
     def _spatial_manufacturer(self, regions, index, threshold):
         candidates = self._nearby(regions, index, threshold)

@@ -53,7 +53,9 @@ LABEL_PATTERNS = {
     ),
     "IMPORTER": re.compile(r"(?i)\b(?:imported|importer)\s*(?:by)?\s*[:.\-]?"),
     "BEST_BEFORE": re.compile(r"(?i)\b(?:best\s*before)\s*[:.\-]?"),
-    "USE_BY": re.compile(r"(?i)\b(?:use\s*by|expiry|exp)\s*[:.\-]?"),
+    "USE_BY": re.compile(
+        r"(?i)\b(?:use\s*by|useby|expiry(?:\s*date)?|exp(?:iry)?(?:\s*date)?)\s*[:.\-]?"
+    ),
     "CONSUMER_CARE": re.compile(
         r"(?i)\b(?:consumer\s*care|customer\s*care|customer\s*service|"
         r"helpline|contact|phone|email|complaints?|suggestions?|queries?)\b"

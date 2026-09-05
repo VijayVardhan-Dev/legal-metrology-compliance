@@ -10,6 +10,7 @@ from app.models.report import Report
 from app.models.ocr_result import OCRResult
 from app.models.ocr_text_region import OCRTextRegion
 from app.models.rule_result import RuleResult
+from app.models.product_category import ProductCategory
 
 __all__ = [
     "User",
@@ -23,4 +24,5 @@ __all__ = [
     "OCRResult",
     "OCRTextRegion",
     "RuleResult",
+    "ProductCategory",
 ]

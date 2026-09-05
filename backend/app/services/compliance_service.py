@@ -8,6 +8,7 @@ from app.models.declaration import Declaration
 from app.models.inspection import Inspection
 from app.models.rule import Rule
 from app.models.rule_result import RuleResult
+from app.models.product_category import ProductCategory
 from app.rules.base import RuleDefinition
 from app.rules.registry import MVP_RULES
 from app.schemas.compliance import ComplianceResponse, RuleResultResponse
@@ -158,6 +159,11 @@ class ComplianceEngine:
 
     @staticmethod
     def _food_status(inspection):
+        classification = getattr(inspection, "product_category", None)
+        if classification is not None:
+            if classification.status != "FOUND" or classification.category == "UNKNOWN":
+                return None
+            return classification.category == "FOOD"
         category = (
             getattr(getattr(inspection, "product", None), "category", "") or ""
         ).lower()
@@ -311,6 +317,9 @@ class ComplianceService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Declarations have not been extracted for this inspection",
             )
+        inspection.product_category = self.db.query(ProductCategory).filter(
+            ProductCategory.inspection_id == inspection_id
+        ).first()
 
         stored_rules = {
             rule.rule_id: rule

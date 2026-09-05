@@ -44,3 +44,7 @@ class Inspection(Base):
     rule_results = relationship(
         "RuleResult", back_populates="inspection", cascade="all, delete-orphan"
     )
+    product_category = relationship(
+        "ProductCategory", back_populates="inspection", uselist=False,
+        cascade="all, delete-orphan",
+    )

@@ -28,3 +28,6 @@ class Product(Base):
 
     # Relationships
     inspections = relationship("Inspection", back_populates="product")
+    category_classifications = relationship(
+        "ProductCategory", back_populates="product", cascade="all, delete-orphan"
+    )

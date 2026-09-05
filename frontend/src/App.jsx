@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["compliance", "Compliance"]];
+const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["compliance", "Compliance"]];
 
 function statusClass(status) {
   return {
@@ -32,6 +32,7 @@ function App() {
   const [inspectionId, setInspectionId] = useState("");
   const [ocr, setOcr] = useState(null);
   const [declarations, setDeclarations] = useState([]);
+  const [category, setCategory] = useState(null);
   const [compliance, setCompliance] = useState(null);
   const [activeStep, setActiveStep] = useState("upload");
   const [running, setRunning] = useState(false);
@@ -41,8 +42,9 @@ function App() {
     ...(inspectionId ? ["upload"] : []),
     ...(ocr ? ["ocr"] : []),
     ...(declarations.length ? ["declarations"] : []),
+    ...(category ? ["category"] : []),
     ...(compliance ? ["compliance"] : []),
-  ]), [inspectionId, ocr, declarations, compliance]);
+  ]), [inspectionId, ocr, declarations, category, compliance]);
 
   function chooseFile(nextFile) {
     if (!nextFile || !nextFile.type.startsWith("image/")) {
@@ -52,11 +54,11 @@ function App() {
     setFile(nextFile);
     setPreview(URL.createObjectURL(nextFile));
     setError("");
-    setInspectionId(""); setOcr(null); setDeclarations([]); setCompliance(null); setActiveStep("upload");
+    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setCompliance(null); setActiveStep("upload");
   }
 
   function reset() {
-    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCompliance(null);
+    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setCompliance(null);
     setActiveStep("upload"); setError("");
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -74,7 +76,9 @@ function App() {
       const ocrResult = await request(`/api/v1/inspections/${created.inspection_id}/ocr`, { method: "POST" });
       setOcr(ocrResult); setActiveStep("declarations");
       const declarationResult = await request(`/api/v1/inspections/${created.inspection_id}/declarations`, { method: "POST" });
-      setDeclarations(declarationResult.declarations || []); setActiveStep("compliance");
+      setDeclarations(declarationResult.declarations || []); setActiveStep("category");
+      const categoryResult = await request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" });
+      setCategory(categoryResult); setActiveStep("compliance");
       const complianceResult = await request(`/api/v1/inspections/${created.inspection_id}/compliance`, { method: "POST" });
       setCompliance(complianceResult);
     } catch (requestError) {
@@ -111,6 +115,10 @@ function App() {
             <section className="card">
               <div className="section-heading"><div><p className="eyebrow">OCR PROCESSING</p><h3>Recognition status</h3></div>{ocr && <span className={statusClass(ocr.status)}>{ocr.status}</span>}</div>
               <div className="metric-grid"><div><span>Status</span><strong>{ocr?.status || "Waiting"}</strong></div><div><span>Average confidence</span><strong>{ocr?.average_confidence != null ? `${(ocr.average_confidence * 100).toFixed(1)}%` : "—"}</strong></div><div><span>Processing time</span><strong>{ocr?.processing_time_ms != null ? `${ocr.processing_time_ms} ms` : "—"}</strong></div></div>
+            </section>
+            <section className="card">
+              <div className="section-heading"><div><p className="eyebrow">CLASSIFICATION</p><h3>Product category</h3></div>{category && <span className={statusClass(category.status)}>{category.status}</span>}</div>
+              {category ? <div className="metric-grid"><div><span>Category</span><strong>{category.category}</strong></div><div><span>Subcategory</span><strong>{category.subcategory || "—"}</strong></div><div><span>Confidence</span><strong>{category.confidence != null ? `${(category.confidence * 100).toFixed(1)}%` : "—"}</strong></div></div> : <div className="empty-state">Category classification will run after declarations.</div>}
             </section>
           </div>
           <div className="right-column">

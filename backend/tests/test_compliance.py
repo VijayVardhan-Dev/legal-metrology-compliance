@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from app.rules.registry import MVP_RULES
 from app.services.compliance_service import ComplianceEngine, ComplianceService
+from app.services.category_service import ProductCategoryClassifier
 
 
 def declaration(
@@ -26,6 +27,14 @@ def inspection(category="food", context="retail"):
     return SimpleNamespace(
         product=SimpleNamespace(category=category),
         notes=context,
+    )
+
+
+def persisted_category(category, status="FOUND", subcategory=None):
+    return SimpleNamespace(
+        category=category,
+        subcategory=subcategory,
+        status=status,
     )
 
 
@@ -182,3 +191,99 @@ def test_seed_contains_all_mvp_rules():
         "LM-PC-005", "LM-PC-008", "LM-PC-009", "LM-PC-010",
         "FSSAI-001", "FSSAI-002", "FSSAI-003",
     }
+
+
+def test_mustard_package_classifies_as_food_spices():
+    result = ProductCategoryClassifier().classify(
+        inspection("unknown", None),
+        [declaration("PRODUCT_NAME", "Surya Mustard Whole")],
+    )
+    assert result.category == "FOOD"
+    assert result.subcategory == "SPICES"
+    assert result.status == "FOUND"
+
+
+def test_biscuit_package_classifies_as_food_bakery():
+    result = ProductCategoryClassifier().classify(
+        inspection("unknown", None),
+        [declaration("PRODUCT_NAME", "Parle-G Biscuits")],
+    )
+    assert result.category == "FOOD"
+    assert result.subcategory == "BISCUITS_BAKERY"
+    assert result.status == "FOUND"
+
+
+def test_clearly_non_food_package_classifies_as_non_food():
+    result = ProductCategoryClassifier().classify(
+        inspection("unknown", None),
+        [declaration("PRODUCT_NAME", "Plastic Storage Container")],
+    )
+    assert result.category == "NON_FOOD"
+    assert result.subcategory is None
+    assert result.status == "FOUND"
+
+
+def test_ambiguous_product_requires_review():
+    result = ProductCategoryClassifier().classify(
+        inspection("unknown", None),
+        [declaration("PRODUCT_NAME", "Daily Essentials")],
+    )
+    assert result.category == "UNKNOWN"
+    assert result.status == "REVIEW_REQUIRED"
+
+
+def test_conflicting_category_evidence_requires_review():
+    result = ProductCategoryClassifier().classify(
+        inspection("unknown", None),
+        [declaration("PRODUCT_NAME", "Mustard Shampoo")],
+    )
+    assert result.category == "UNKNOWN"
+    assert result.status == "REVIEW_REQUIRED"
+
+
+def test_persisted_food_category_allows_fssai_evaluation():
+    product_inspection = inspection("unknown", None)
+    product_inspection.product_category = persisted_category("FOOD", subcategory="SPICES")
+    results = {
+        item.rule.rule_id: item
+        for item in ComplianceEngine().evaluate(
+            product_inspection,
+            [declaration("BEST_BEFORE", "12 MONTHS FROM PACKING")],
+        )
+    }
+    assert results["FSSAI-001"].reason != (
+        "The product category is not sufficient to determine whether the food-specific rule applies."
+    )
+    assert results["FSSAI-002"].status == "REVIEW_REQUIRED"
+
+
+def test_persisted_non_food_category_makes_fssai_rules_not_applicable():
+    product_inspection = inspection("unknown", None)
+    product_inspection.product_category = persisted_category("NON_FOOD")
+    results = {
+        item.rule.rule_id: item
+        for item in ComplianceEngine().evaluate(product_inspection, [])
+    }
+    assert results["FSSAI-001"].status == "COMPLIANT"
+    assert "non-food" in results["FSSAI-001"].reason
+
+
+def test_persisted_unknown_category_keeps_fssai_review_required():
+    product_inspection = inspection("food", "retail")
+    product_inspection.product_category = persisted_category(
+        "UNKNOWN", status="REVIEW_REQUIRED"
+    )
+    results = {
+        item.rule.rule_id: item
+        for item in ComplianceEngine().evaluate(product_inspection, [])
+    }
+    assert results["FSSAI-001"].status == "REVIEW_REQUIRED"
+
+
+def test_category_classification_failure_keeps_fssai_review_required():
+    result = ProductCategoryClassifier().classify(
+        inspection("unknown", None),
+        [],
+    )
+    assert result.category == "UNKNOWN"
+    assert result.status == "REVIEW_REQUIRED"

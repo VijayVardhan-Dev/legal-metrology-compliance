@@ -12,6 +12,7 @@ from .ocr import (
 )
 from .declaration import DeclarationResponse, DeclarationListResponse
 from .compliance import ComplianceResponse, RuleResultResponse
+from .product_category import ProductCategoryResponse
 
 __all__ = [
     "ProductCreate",
@@ -33,4 +34,5 @@ __all__ = [
     "DeclarationListResponse",
     "ComplianceResponse",
     "RuleResultResponse",
+    "ProductCategoryResponse",
 ]

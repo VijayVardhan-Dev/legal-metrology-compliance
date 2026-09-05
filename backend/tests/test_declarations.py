@@ -175,6 +175,87 @@ def test_split_ocr_regions_are_grouped_without_cross_assigning_values():
     assert by_type(extracted, "MRP").confidence == 0.97
 
 
+def test_spatial_quantity_includes_adjacent_unit_and_label_regions():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Net", 10, 10, 25, 18, 0.98),
+            ("Wt.", 40, 10, 25, 18, 0.97),
+            ("500", 72, 10, 30, 18, 0.96),
+            ("g", 108, 10, 12, 18, 0.95),
+        )
+    )
+    quantity = by_type(extracted, "NET_QUANTITY")
+    assert quantity.value == "500"
+    assert quantity.unit == "g"
+    assert quantity.source_text == "Net Wt. 500 g"
+    assert quantity.ocr_text_region_ids == ["0", "1", "2", "3"]
+
+
+def test_spatial_quantity_without_unit_does_not_infer_one():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Net", 10, 10, 25, 18, 0.98),
+            ("500", 72, 10, 30, 18, 0.96),
+            ("MRP", 10, 100, 35, 18, 0.98),
+            ("100.00", 52, 100, 48, 18, 0.97),
+        )
+    )
+    quantity = by_type(extracted, "NET_QUANTITY")
+    assert quantity.value == "500"
+    assert quantity.unit is None
+    assert quantity.source_text == "Net 500"
+
+
+def test_use_by_and_best_before_are_extracted_separately():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Best", 10, 10, 35, 18, 0.98),
+            ("Before", 52, 10, 50, 18, 0.97),
+            ("14", 110, 10, 18, 18, 0.96),
+            ("SEP", 134, 10, 30, 18, 0.95),
+            ("2026", 170, 10, 42, 18, 0.94),
+            ("Use", 10, 70, 30, 18, 0.98),
+            ("By", 46, 70, 20, 18, 0.97),
+            ("14", 78, 70, 18, 18, 0.96),
+            ("SEP", 102, 70, 30, 18, 0.95),
+            ("2026", 138, 70, 42, 18, 0.94),
+            ("999", 500, 500, 30, 18, 0.99),
+        )
+    )
+    best_before = by_type(extracted, "BEST_BEFORE")
+    use_by = by_type(extracted, "USE_BY")
+    assert best_before.value == "14 SEP 2026"
+    assert use_by.value == "14 SEP 2026"
+    assert best_before.ocr_text_region_ids != use_by.ocr_text_region_ids
+    assert "best" in best_before.source_text.lower()
+    assert "use" in use_by.source_text.lower()
+
+
+def test_single_region_date_labels_preserve_distinct_types():
+    extracted = DeclarationExtractor().extract_regions(
+        regions(
+            "Best Before: 14 SEP 2026",
+            "Use By: 14 SEP 2026",
+        )
+    )
+    assert by_type(extracted, "BEST_BEFORE").value == "14 SEP 2026"
+    assert by_type(extracted, "USE_BY").value == "14 SEP 2026"
+
+
+def test_unrelated_date_is_not_assigned_to_use_by():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Use By", 10, 10, 45, 18, 0.98),
+            ("14", 500, 500, 18, 18, 0.96),
+            ("SEP", 524, 500, 30, 18, 0.95),
+            ("2026", 560, 500, 42, 18, 0.94),
+        )
+    )
+    use_by = by_type(extracted, "USE_BY")
+    assert use_by.value is None
+    assert use_by.status == "INCOMPLETE"
+
+
 def create_test_image():
     file = io.BytesIO()
     Image.new("RGB", (100, 100), color="red").save(file, format="JPEG")
@@ -219,3 +300,34 @@ def test_declaration_api_states():
     inspection_id = upload.json()["inspection_id"]
     response = client.post(f"/api/v1/inspections/{inspection_id}/declarations")
     assert response.status_code == 409
+
+
+def test_category_api_classifies_extracted_product():
+    upload = client.post(
+        "/api/v1/inspections",
+        data={"product_name": "Mustard Test", "category": "unknown"},
+        files={"image": ("category.jpg", create_test_image(), "image/jpeg")},
+    )
+    assert upload.status_code == 201
+    inspection_id = upload.json()["inspection_id"]
+    raw_result = [
+        [[[1, 1], [10, 1], [10, 10], [1, 10]], ("Surya Mustard Whole", 0.96)],
+    ]
+    with patch("app.services.ocr_service.preprocess_image") as preprocess:
+        with patch("app.services.ocr_service.extract_text_from_image") as extract:
+            preprocess.return_value = ("image", 100, 100)
+            extract.return_value = {"raw_result": raw_result, "processing_time_ms": 1}
+            assert client.post(f"/api/v1/inspections/{inspection_id}/ocr").status_code == 200
+
+    assert client.post(f"/api/v1/inspections/{inspection_id}/declarations").status_code == 200
+    category = client.post(f"/api/v1/inspections/{inspection_id}/category")
+    assert category.status_code == 200
+    assert category.json()["category"] == "FOOD"
+    assert category.json()["subcategory"] == "SPICES"
+    assert client.get(f"/api/v1/inspections/{inspection_id}/category").status_code == 200
+    compliance = client.post(f"/api/v1/inspections/{inspection_id}/compliance")
+    assert compliance.status_code == 200
+    fssai_result = next(
+        item for item in compliance.json()["results"] if item["rule_id"] == "FSSAI-001"
+    )
+    assert "category is not sufficient" not in fssai_result["reason"]
