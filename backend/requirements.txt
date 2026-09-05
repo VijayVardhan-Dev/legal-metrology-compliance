@@ -13,3 +13,4 @@ Pillow==11.0.0
 paddlepaddle==3.3.1
 paddleocr
 opencv-python
+reportlab==4.2.5

@@ -103,11 +103,18 @@ function App() {
   const [category, setCategory] = useState(null);
   const [visualAnalysis, setVisualAnalysis] = useState(null);
   const [compliance, setCompliance] = useState(null);
+  const [report, setReport] = useState(null);
+  const [reportRunning, setReportRunning] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState([]);
   const [evidenceRule, setEvidenceRule] = useState("");
   const [activeStep, setActiveStep] = useState("upload");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [view, setView] = useState("workbench");
+  const [history, setHistory] = useState({ items: [], page: 1, page_size: 10, total: 0, total_pages: 0 });
+  const [dashboard, setDashboard] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState({ search: "", compliance_status: "", category: "" });
 
   function login(rememberMe, user) {
     if (rememberMe) {
@@ -141,13 +148,37 @@ function App() {
     setFile(nextFile);
     setPreview(URL.createObjectURL(nextFile));
     setError("");
-    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setSelectedEvidence([]); setEvidenceRule(""); setActiveStep("upload");
+    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setReport(null); setSelectedEvidence([]); setEvidenceRule(""); setActiveStep("upload");
   }
 
   function reset() {
-    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setSelectedEvidence([]); setEvidenceRule("");
+    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setReport(null); setSelectedEvidence([]); setEvidenceRule("");
     setActiveStep("upload"); setError("");
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function loadHistory(page = 1) {
+    setHistoryLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ page: String(page), page_size: "10", sort_by: "created_at", sort_order: "desc" });
+      Object.entries(historyQuery).forEach(([key, value]) => { if (value) params.set(key, value); });
+      const [historyResult, summaryResult] = await Promise.all([
+        request(`/api/v1/inspections?${params.toString()}`),
+        request("/api/v1/dashboard/summary"),
+      ]);
+      setHistory(historyResult);
+      setDashboard(summaryResult);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function showHistory() {
+    setView("history");
+    loadHistory(1);
   }
 
   async function viewEvidence(ruleId) {
@@ -160,6 +191,25 @@ function App() {
     } catch (requestError) {
       setError(requestError.message);
     }
+  }
+
+  async function generateReport() {
+    if (!inspectionId || !compliance) return;
+    setReportRunning(true);
+    setError("");
+    try {
+      const generated = await request(`/api/v1/inspections/${inspectionId}/report`, { method: "POST" });
+      setReport(generated);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setReportRunning(false);
+    }
+  }
+
+  function downloadReport() {
+    if (!inspectionId) return;
+    window.open(`${API_BASE_URL}/api/v1/inspections/${inspectionId}/report/download`, "_blank", "noopener,noreferrer");
   }
 
   async function runInspection() {
@@ -200,7 +250,11 @@ function App() {
       <header className="topbar">
         <div className="brand-mark">LM</div>
         <div><div className="eyebrow">INSPECTION WORKBENCH</div><h1>Legal Metrology Compliance</h1></div>
-        <div className="api-indicator"><span /> API {API_BASE_URL}</div>
+        <div className="topbar-actions">
+          <button className={`nav-button ${view === "workbench" ? "nav-button-active" : ""}`} onClick={() => setView("workbench")}>Workbench</button>
+          <button className={`nav-button ${view === "history" ? "nav-button-active" : ""}`} onClick={showHistory}>Inspection history</button>
+          <div className="api-indicator"><span /> API {API_BASE_URL}</div>
+        </div>
         <button className="logout-button" onClick={logout}>Sign out</button>
       </header>
       <main className="page">
@@ -208,7 +262,27 @@ function App() {
           <div><p className="eyebrow">PHASE 1–6 TESTING FRONTEND</p><h2>Inspect a package label end to end.</h2><p className="hero-copy">Upload one package image to run OCR, declaration extraction, and deterministic compliance evaluation in sequence.</p></div>
           {inspectionId && <div className="inspection-chip">Inspection <strong>{inspectionId.slice(0, 8)}…</strong></div>}
         </section>
-        <section className="stepper card">
+        {view === "history" ? <section className="history-view">
+          <div className="history-heading"><div><p className="eyebrow">PHASE 10</p><h2>Inspection history</h2><p className="hero-copy">Review persisted inspections, compliance outcomes, confidence, and processing status.</p></div><button className="secondary-button" onClick={() => setView("workbench")}>New inspection</button></div>
+          {dashboard && <div className="history-summary metric-grid">
+            <div><span>Total inspections</span><strong>{dashboard.total_inspections}</strong></div>
+            <div><span>Compliant</span><strong>{dashboard.compliant_inspections}</strong></div>
+            <div><span>Non-compliant</span><strong>{dashboard.non_compliant_inspections}</strong></div>
+            <div><span>Review required</span><strong>{dashboard.review_required_inspections}</strong></div>
+            <div><span>Without compliance</span><strong>{dashboard.inspections_without_completed_compliance}</strong></div>
+            <div><span>Reports generated</span><strong>{dashboard.reports_generated}</strong></div>
+          </div>}
+          <section className="card history-card">
+            <div className="history-filters">
+              <input value={historyQuery.search} onChange={(event) => setHistoryQuery({ ...historyQuery, search: event.target.value })} placeholder="Search product, brand, ID, report…" />
+              <select value={historyQuery.compliance_status} onChange={(event) => setHistoryQuery({ ...historyQuery, compliance_status: event.target.value })}><option value="">All compliance statuses</option><option value="COMPLIANT">Compliant</option><option value="NON_COMPLIANT">Non-compliant</option><option value="REVIEW_REQUIRED">Review required</option></select>
+              <input value={historyQuery.category} onChange={(event) => setHistoryQuery({ ...historyQuery, category: event.target.value })} placeholder="Category" />
+              <button className="primary-button history-filter-button" onClick={() => loadHistory(1)} disabled={historyLoading}>{historyLoading ? "Loading…" : "Apply filters"}</button>
+            </div>
+            {historyLoading ? <div className="empty-state">Loading inspection history…</div> : history.items.length === 0 ? <div className="empty-state">No inspections match the selected filters.</div> : <div className="table-scroll"><table><thead><tr><th>Inspection</th><th>Product</th><th>Compliance</th><th>Confidence</th><th>Processing</th><th>Rules</th><th>Report</th></tr></thead><tbody>{history.items.map((item) => <tr key={item.inspection_id}><td><strong>{item.inspection_id.slice(0, 8)}…</strong><small className="unit">{new Date(item.created_at).toLocaleString()}</small></td><td><strong>{item.product_name}</strong><small className="unit">{prettyLabel(item.category)}{item.subcategory ? ` · ${item.subcategory}` : ""}</small></td><td>{item.overall_compliance_status ? <span className={statusClass(item.overall_compliance_status)}>{prettyLabel(item.overall_compliance_status)}</span> : <span className="status status-muted">Not evaluated</span>}</td><td>{item.overall_confidence != null ? `${(item.overall_confidence * 100).toFixed(1)}%` : "—"}</td><td><small>OCR: {item.ocr_status || "—"}</small><small className="unit">Visual: {item.visual_analysis_status || "—"}</small></td><td><small>✓ {item.compliant_rule_count} · ✕ {item.non_compliant_rule_count}</small><small className="unit">Review: {item.review_required_rule_count}</small></td><td>{item.report_number || "—"}</td></tr>)}</tbody></table></div>}
+            {history.total_pages > 1 && <div className="pagination"><button className="secondary-button" disabled={history.page <= 1 || historyLoading} onClick={() => loadHistory(history.page - 1)}>Previous</button><span>Page {history.page} of {history.total_pages} · {history.total} inspections</span><button className="secondary-button" disabled={history.page >= history.total_pages || historyLoading} onClick={() => loadHistory(history.page + 1)}>Next</button></div>}
+          </section>
+        </section> : <><section className="stepper card">
           {STEPS.map(([key, label], index) => <div className={`step ${activeStep === key ? "step-active" : ""} ${completedSteps.has(key) ? "step-complete" : ""}`} key={key}><div className="step-number">{completedSteps.has(key) ? "✓" : index + 1}</div><span>{label}</span>{index < STEPS.length - 1 && <div className="step-line" />}</div>)}
         </section>
         {error && <div className="error-banner"><strong>Inspection stopped.</strong> {error}</div>}
@@ -260,10 +334,11 @@ function App() {
                 </div>
                 <div className="rule-list">{(compliance.results || []).map((result) => <article className="rule-card" key={result.rule_id}><div className="rule-top"><div><strong>{result.rule_id}</strong><span className="legal-reference">{result.legal_reference}</span></div><span className={statusClass(result.status)}>{result.status}</span></div><p>{result.reason}</p><div className="rule-meta"><span>Severity: <strong>{result.severity}</strong></span><span>Applicability: <strong>{result.applicability_status || "APPLICABLE"}</strong></span><span>Confidence: <strong>{result.confidence != null ? `${(result.confidence * 100).toFixed(1)}%` : "—"}</strong></span></div>{result.evidence?.length > 0 && <button className="text-button" onClick={() => viewEvidence(result.rule_id)}>View evidence ({result.evidence.length})</button>}</article>)}</div>
                 {selectedEvidence.length > 0 && <div className="evidence-viewer"><div className="section-heading"><div><p className="eyebrow">EVIDENCE</p><h3>{evidenceRule}</h3></div><button className="text-button" onClick={() => setSelectedEvidence([])}>Close</button></div><div className="evidence-image"><img src={`${API_BASE_URL}/api/v1/inspections/${inspectionId}/image`} alt="Original package evidence" />{selectedEvidence.map((item) => item.bbox?.width > 0 && <div className="evidence-box" key={`${item.evidence_id}-${item.ocr_region_id}`} style={{ left: `${(item.bbox.x / item.image_width) * 100}%`, top: `${(item.bbox.y / item.image_height) * 100}%`, width: `${(item.bbox.width / item.image_width) * 100}%`, height: `${(item.bbox.height / item.image_height) * 100}%` }} />)}</div><div className="evidence-details">{selectedEvidence.map((item) => <div key={`${item.evidence_id}-${item.ocr_region_id}`}><strong>{prettyLabel(item.declaration_type)}</strong><span>{item.value || "Value not confidently extracted"} · {item.source_text || "—"}</span><small>OCR confidence: {item.ocr_confidence != null ? `${(item.ocr_confidence * 100).toFixed(1)}%` : "—"} · Region: {item.ocr_region_id}</small></div>)}</div></div>}
+                {compliance && <div className="report-actions"><div><p className="eyebrow">PHASE 9</p><strong>Inspection report</strong>{report && <span className="report-number">{report.report_number}</span>}</div><div className="report-buttons">{!report && <button className="secondary-button" disabled={reportRunning} onClick={generateReport}>{reportRunning ? "Generating PDF…" : "Generate report"}</button>}{report && <button className="secondary-button" onClick={downloadReport}>Download PDF</button>}</div></div>}
               </div>}
             </section>
           </div>
-        </section>
+        </section></>}
       </main>
     </div>
   );

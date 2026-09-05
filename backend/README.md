@@ -58,6 +58,27 @@ pytest tests/ -v
 | POST | `/api/v1/inspections/{id}/compliance` | Evaluate traceable compliance results |
 | GET  | `/api/v1/inspections/{id}/compliance` | Retrieve compliance summary and rule results |
 | GET  | `/api/v1/inspections/{id}/evidence` | Retrieve original-image evidence, optionally filtered by `rule`, `declaration`, or `evidence_type` |
+| POST | `/api/v1/inspections/{id}/report` | Generate an evidence-backed PDF inspection report |
+| GET  | `/api/v1/inspections/{id}/report` | Retrieve latest report metadata |
+| GET  | `/api/v1/inspections/{id}/report/download` | Download the latest generated PDF report |
+| GET | `/api/v1/inspections` | Paginated inspection history with filters and safe sorting |
+| GET | `/api/v1/dashboard/summary` | Aggregated inspection/compliance summary |
+| GET | `/api/v1/dashboard/compliance-distribution` | Compliance status counts |
+| GET | `/api/v1/dashboard/category-distribution` | Category and subcategory counts |
+| GET | `/api/v1/dashboard/rules` | Rule-level evaluation statistics |
+| GET | `/api/v1/dashboard/recent-inspections` | Most recent concise inspection summaries |
+
+Inspection history accepts `page` (default 1), `page_size` (default 20, maximum
+100), `status`, `compliance_status`, `category`, `subcategory`, `product_name`,
+`report_number`, `search`, `minimum_confidence`, `maximum_confidence`,
+`date_from`, `date_to`, `sort_by`, and `sort_order`. Dates are inclusive ISO
+8601 timestamps. Supported sort fields are `created_at`, `updated_at`,
+`overall_confidence`, `product_name`, and `compliance_status`.
+
+Dashboard endpoints accept inclusive ISO 8601 `date_from`/`date_to` filters and
+an optional `category`. They aggregate persisted `compliance_runs` and
+`rule_results`; inspections without a completed compliance run are counted
+separately and are never treated as compliant.
 
 ### API Docs
 

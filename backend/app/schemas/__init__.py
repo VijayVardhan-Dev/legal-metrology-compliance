@@ -13,6 +13,16 @@ from .ocr import (
 from .declaration import DeclarationResponse, DeclarationListResponse
 from .compliance import ComplianceResponse, RuleResultResponse
 from .product_category import ProductCategoryResponse
+from .report import ReportResponse
+from .history import (
+    InspectionHistoryItem,
+    InspectionHistoryResponse,
+    DashboardSummary,
+    ComplianceDistribution,
+    CategoryDistribution,
+    RuleStatistics,
+    RecentInspection,
+)
 from .auth import AuthCredentials, AuthResponse, AuthUserResponse, RegisterRequest
 
 __all__ = [
@@ -36,6 +46,14 @@ __all__ = [
     "ComplianceResponse",
     "RuleResultResponse",
     "ProductCategoryResponse",
+    "ReportResponse",
+    "InspectionHistoryItem",
+    "InspectionHistoryResponse",
+    "DashboardSummary",
+    "ComplianceDistribution",
+    "CategoryDistribution",
+    "RuleStatistics",
+    "RecentInspection",
     "AuthCredentials",
     "AuthResponse",
     "AuthUserResponse",

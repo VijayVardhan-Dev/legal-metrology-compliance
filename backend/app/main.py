@@ -12,6 +12,8 @@ from app.api.health import router as health_router
 from app.api.auth import router as auth_router
 from app.api.inspections import router as inspections_router
 from app.api.visual_analysis import router as visual_analysis_router
+from app.api.reports import router as reports_router
+from app.api.dashboard import router as dashboard_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -52,6 +54,8 @@ app.include_router(health_router, prefix="/api/v1", tags=["Health"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(inspections_router, prefix="/api/v1/inspections", tags=["Inspections"])
 app.include_router(visual_analysis_router, prefix="/api/v1/inspections", tags=["Visual analysis"])
+app.include_router(reports_router, prefix="/api/v1/inspections", tags=["Reports"])
+app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 
 # ---------------------------------------------------------------------------
