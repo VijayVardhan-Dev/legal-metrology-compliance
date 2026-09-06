@@ -985,13 +985,14 @@ select.form-input {
 }
 
 .step-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 7px;
   white-space: nowrap;
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--color-text-tertiary);
+  flex-shrink: 0;
 }
 
 .step-number {
@@ -1003,15 +1004,21 @@ select.form-input {
   border-radius: 50%;
   font-size: 10px;
   font-weight: 700;
+  line-height: 1;
   flex-shrink: 0;
 }
 
 .step-connector {
+  display: block;
   width: 32px;
   height: 1px;
   background: var(--color-border);
   margin: 0 8px;
   flex-shrink: 0;
+}
+
+.step-connector.step-connector-done {
+  background: var(--color-compliant-border);
 }
 
 .step-item.step-done {

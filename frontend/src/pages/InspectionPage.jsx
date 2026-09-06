@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { api, poll } from '../services/api';
 import { formatPercent, prettify } from '../utils/format';
@@ -169,15 +169,19 @@ export default function InspectionPage() {
           const isDone = i < currentIndex || (key === 'complete' && state.compliance);
           const isCurrent = i === currentIndex && processing;
           return (
-            <span key={key}>
-              {i > 0 && <span className="step-connector" />}
+            <Fragment key={key}>
+              {i > 0 && (
+                <span
+                  className={`step-connector${isDone ? ' step-connector-done' : ''}`}
+                />
+              )}
               <span
                 className={`step-item${isDone ? ' step-done' : ''}${isCurrent ? ' step-current' : ''}`}
               >
                 <span className="step-number">{isDone ? '✓' : i + 1}</span>
                 {label}
               </span>
-            </span>
+            </Fragment>
           );
         })}
       </div>
