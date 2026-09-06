@@ -230,10 +230,11 @@ function App() {
       setActiveStep("declarations");
       const declarationResult = await request(`/api/v1/inspections/${created.inspection_id}/declarations`, { method: "POST" });
       setDeclarations(declarationResult.declarations || []); setActiveStep("category");
-      const categoryResult = await request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" });
-      setCategory(categoryResult); setActiveStep("visual");
-      const visualResult = await request(`/api/v1/inspections/${created.inspection_id}/visual-analysis`, { method: "POST" });
-      setVisualAnalysis(visualResult); setActiveStep("compliance");
+      const [categoryResult, visualResult] = await Promise.all([
+        request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" }),
+        request(`/api/v1/inspections/${created.inspection_id}/visual-analysis`, { method: "POST" }),
+      ]);
+      setCategory(categoryResult); setVisualAnalysis(visualResult); setActiveStep("compliance");
       const complianceResult = await request(`/api/v1/inspections/${created.inspection_id}/compliance`, { method: "POST" });
       setCompliance(complianceResult);
     } catch (requestError) {

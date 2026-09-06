@@ -34,6 +34,9 @@ def get_ocr_engine():
             use_doc_unwarping=False,
             text_detection_model_name="PP-OCRv5_mobile_det",
             text_recognition_model_name="PP-OCRv5_mobile_rec",
+            text_det_limit_side_len=384,
+            text_det_limit_type="max",
+            text_recognition_batch_size=32,
         )
         logger.info("PaddleOCR engine initialized.")
     return _ocr_engine

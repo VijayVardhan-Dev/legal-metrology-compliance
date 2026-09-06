@@ -1,4 +1,6 @@
 import os
+from contextlib import asynccontextmanager
+
 # Configure Paddle environment flags before any Paddle imports
 os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
@@ -14,11 +16,19 @@ from app.api.inspections import router as inspections_router
 from app.api.visual_analysis import router as visual_analysis_router
 from app.api.reports import router as reports_router
 from app.api.dashboard import router as dashboard_router
+from ai.ocr.engine import get_ocr_engine
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    get_ocr_engine()
+    yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="AI-assisted Legal Metrology compliance screening for packaged commodities in India.",
+    lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
