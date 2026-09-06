@@ -52,6 +52,10 @@ class Inspection(Base):
         "VisualAnalysis", back_populates="inspection", uselist=False,
         cascade="all, delete-orphan",
     )
+    nutrition_analysis = relationship(
+        "NutritionAnalysis", back_populates="inspection", uselist=False,
+        cascade="all, delete-orphan",
+    )
     compliance_run = relationship(
         "ComplianceRun", back_populates="inspection", uselist=False,
         cascade="all, delete-orphan",

@@ -16,11 +16,9 @@ from app.api.inspections import router as inspections_router
 from app.api.visual_analysis import router as visual_analysis_router
 from app.api.reports import router as reports_router
 from app.api.dashboard import router as dashboard_router
-from ai.ocr.engine import get_ocr_engine
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    get_ocr_engine()
     yield
 
 

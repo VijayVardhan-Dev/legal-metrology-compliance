@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
-const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["visual", "Visual Analysis"], ["compliance", "Compliance"]];
+const STEPS = [["upload", "Upload"], ["ocr", "OCR"], ["declarations", "Declarations"], ["category", "Category"], ["visual", "Visual Analysis"], ["nutrition", "Nutrition"], ["compliance", "Compliance"]];
 
 function statusClass(status) {
   return {
@@ -102,6 +102,7 @@ function App() {
   const [declarations, setDeclarations] = useState([]);
   const [category, setCategory] = useState(null);
   const [visualAnalysis, setVisualAnalysis] = useState(null);
+  const [nutritionAnalysis, setNutritionAnalysis] = useState(null);
   const [compliance, setCompliance] = useState(null);
   const [report, setReport] = useState(null);
   const [reportRunning, setReportRunning] = useState(false);
@@ -137,8 +138,9 @@ function App() {
     ...(declarations.length ? ["declarations"] : []),
     ...(category ? ["category"] : []),
     ...(visualAnalysis ? ["visual"] : []),
+    ...(nutritionAnalysis ? ["nutrition"] : []),
     ...(compliance ? ["compliance"] : []),
-  ]), [inspectionId, ocr, declarations, category, visualAnalysis, compliance]);
+  ]), [inspectionId, ocr, declarations, category, visualAnalysis, nutritionAnalysis, compliance]);
 
   function chooseFile(nextFile) {
     if (!nextFile || !nextFile.type.startsWith("image/")) {
@@ -148,11 +150,11 @@ function App() {
     setFile(nextFile);
     setPreview(URL.createObjectURL(nextFile));
     setError("");
-    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setReport(null); setSelectedEvidence([]); setEvidenceRule(""); setActiveStep("upload");
+    setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setNutritionAnalysis(null); setCompliance(null); setReport(null); setSelectedEvidence([]); setEvidenceRule(""); setActiveStep("upload");
   }
 
   function reset() {
-    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setCompliance(null); setReport(null); setSelectedEvidence([]); setEvidenceRule("");
+    setFile(null); setPreview(""); setInspectionId(""); setOcr(null); setDeclarations([]); setCategory(null); setVisualAnalysis(null); setNutritionAnalysis(null); setCompliance(null); setReport(null); setSelectedEvidence([]); setEvidenceRule("");
     setActiveStep("upload"); setError("");
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -234,7 +236,14 @@ function App() {
         request(`/api/v1/inspections/${created.inspection_id}/category`, { method: "POST" }),
         request(`/api/v1/inspections/${created.inspection_id}/visual-analysis`, { method: "POST" }),
       ]);
-      setCategory(categoryResult); setVisualAnalysis(visualResult); setActiveStep("compliance");
+      setCategory(categoryResult); setVisualAnalysis(visualResult); setActiveStep("nutrition");
+      try {
+        const nutritionResult = await request(`/api/v1/inspections/${created.inspection_id}/nutrition-analysis`, { method: "POST" });
+        setNutritionAnalysis(nutritionResult);
+      } catch (nutritionError) {
+        setNutritionAnalysis({ status: "FAILED", error_message: nutritionError.message, warnings: ["Nutrition analysis was unavailable. Legal Metrology compliance was still completed."] });
+      }
+      setActiveStep("compliance");
       const complianceResult = await request(`/api/v1/inspections/${created.inspection_id}/compliance`, { method: "POST" });
       setCompliance(complianceResult);
     } catch (requestError) {
@@ -308,6 +317,22 @@ function App() {
             <section className="card">
               <div className="section-heading"><div><p className="eyebrow">PHASE 5</p><h3>Extracted declarations</h3></div><span className="count-badge">{declarations.length}</span></div>
               {declarations.length ? <div className="table-scroll"><table><thead><tr><th>Type</th><th>Value</th><th>Confidence</th><th>Status</th><th>Source text</th></tr></thead><tbody>{declarations.map((item) => <tr key={item.id || `${item.declaration_type}-${item.source_text}`}><td className="type-cell">{prettyLabel(item.declaration_type)}</td><td><strong>{item.value || "Not confidently extracted"}</strong>{item.unit && <small className="unit">{item.unit}</small>}</td><td>{item.confidence != null ? `${(item.confidence * 100).toFixed(1)}%` : "—"}</td><td><span className={statusClass(item.status)}>{item.status}</span></td><td className="source-cell">{item.source_text || "—"}</td></tr>)}</tbody></table></div> : <div className="empty-state">Declarations will appear here after OCR completes.</div>}
+            </section>
+            <section className="card nutrition-card">
+              <div className="section-heading"><div><p className="eyebrow">NUTRITION & INGREDIENT ANALYZER</p><h3>Nutrition analysis</h3></div>{nutritionAnalysis?.status && <span className={statusClass(nutritionAnalysis.status === "COMPLETED" ? "FOUND" : "REVIEW_REQUIRED")}>{nutritionAnalysis.status}</span>}</div>
+              {!nutritionAnalysis ? <div className="empty-state">Nutrition, ingredients, and allergens will be analyzed from the completed OCR text.</div> : nutritionAnalysis.status === "FAILED" ? <div className="error-banner">{nutritionAnalysis.error_message || "Nutrition analysis could not be completed."}</div> : <div>
+                <div className="metric-grid"><div><span>Nutrition confidence</span><strong>{nutritionAnalysis.nutrition_confidence != null ? `${(nutritionAnalysis.nutrition_confidence * 100).toFixed(1)}%` : "—"}</strong></div><div><span>Ingredient confidence</span><strong>{nutritionAnalysis.ingredient_confidence != null ? `${(nutritionAnalysis.ingredient_confidence * 100).toFixed(1)}%` : "—"}</strong></div><div><span>Allergens detected</span><strong>{nutritionAnalysis.allergens?.length || 0}</strong></div></div>
+                {nutritionAnalysis.warnings?.length > 0 && <ul className="warning-list">{nutritionAnalysis.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>}
+                <h4>Nutrition information</h4>
+                <div className="table-scroll"><table><thead><tr><th>Nutrient</th><th>Amount</th><th>Basis</th><th>Confidence</th></tr></thead><tbody>{Object.entries(nutritionAnalysis.nutrition || {}).map(([name, item]) => <tr key={name}><td className="type-cell">{name}</td><td><strong>{item.value || "Not detected"}</strong>{item.unit && ` ${item.unit}`}</td><td>{item.basis || "Not detected"}</td><td>{item.confidence ? `${(item.confidence * 100).toFixed(1)}%` : "—"}</td></tr>)}</tbody></table></div>
+                <h4>Ingredient analysis</h4>
+                <div className="table-scroll"><table><thead><tr><th>Ingredient</th><th>Category</th><th>Purpose</th><th>Assessment</th></tr></thead><tbody>{nutritionAnalysis.ingredients?.length ? nutritionAnalysis.ingredients.map((item, index) => <tr key={`${item.name}-${index}`}><td className="type-cell">{item.name}</td><td>{item.category}</td><td>{item.purpose}</td><td><span className={`status status-${item.assessment === "moderation" ? "yellow" : item.assessment === "insufficient_information" ? "muted" : item.assessment === "additive" ? "blue" : "green"}`}>{item.assessment}</span><small className="unit">{item.reason}</small></td></tr>) : <tr><td colSpan="4">Not detected</td></tr>}</tbody></table></div>
+                <h4>Allergens</h4>
+                {nutritionAnalysis.allergens?.length ? <div className="warning-list"><strong>Allergens detected:</strong> {nutritionAnalysis.allergens.map((item) => item.name).join(", ")}</div> : <div className="empty-state">No allergens were explicitly detected in the extracted label text.</div>}
+                <h4>Consumer insights</h4>
+                <ul className="warning-list">{(nutritionAnalysis.insights || ["Unable to determine from the available label information."]).map((insight, index) => <li key={`${insight}-${index}`}>{insight}</li>)}</ul>
+                <h4>Raw detected ingredient list</h4><p className="analysis-note">{nutritionAnalysis.ingredient_text || "Not detected"}</p>
+              </div>}
             </section>
             <section className="card">
               <div className="section-heading"><div><p className="eyebrow">PHASE 7</p><h3>Visual analysis</h3></div>{visualAnalysis?.quality_status && <span className={statusClass(visualAnalysis.quality_status)}>{visualAnalysis.quality_status}</span>}</div>

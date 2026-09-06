@@ -24,6 +24,7 @@ from .history import (
     RecentInspection,
 )
 from .auth import AuthCredentials, AuthResponse, AuthUserResponse, RegisterRequest
+from .nutrition import NutritionAnalysisResponse
 
 __all__ = [
     "ProductCreate",
@@ -58,4 +59,5 @@ __all__ = [
     "AuthResponse",
     "AuthUserResponse",
     "RegisterRequest",
+    "NutritionAnalysisResponse",
 ]

@@ -22,6 +22,8 @@ from app.schemas.product_category import ProductCategoryResponse
 from app.services.category_service import ProductCategoryService
 from app.schemas.history import InspectionHistoryResponse
 from app.services.dashboard_service import DashboardService
+from app.schemas.nutrition import NutritionAnalysisResponse
+from app.services.nutrition_service import NutritionAnalysisService
 
 router = APIRouter()
 
@@ -116,6 +118,17 @@ def get_ocr_results(inspection_id: str, db: Session = Depends(get_db)):
     """
     ocr_service = OCRService(db)
     return ocr_service.get_ocr_result(inspection_id)
+
+
+@router.post("/{inspection_id}/nutrition-analysis", response_model=NutritionAnalysisResponse)
+def analyze_nutrition(inspection_id: str, db: Session = Depends(get_db)):
+    """Analyze nutrition, ingredients, allergens, and label insights from completed OCR."""
+    return NutritionAnalysisService(db).analyze_for_inspection(inspection_id)
+
+
+@router.get("/{inspection_id}/nutrition-analysis", response_model=NutritionAnalysisResponse)
+def get_nutrition_analysis(inspection_id: str, db: Session = Depends(get_db)):
+    return NutritionAnalysisService(db).get_for_inspection(inspection_id)
 
 
 @router.post("/{inspection_id}/declarations", response_model=DeclarationListResponse)

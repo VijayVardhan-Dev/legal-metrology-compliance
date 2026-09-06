@@ -1,11 +1,19 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 from typing import List
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+    )
 
     # Application
     APP_NAME: str = "Legal Metrology Compliance API"

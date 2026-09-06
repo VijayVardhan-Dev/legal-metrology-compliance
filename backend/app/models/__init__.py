@@ -13,6 +13,7 @@ from app.models.rule_result import RuleResult
 from app.models.product_category import ProductCategory
 from app.models.visual_analysis import VisualAnalysis
 from app.models.compliance_run import ComplianceRun
+from app.models.nutrition_analysis import NutritionAnalysis
 
 __all__ = [
     "User",
@@ -29,4 +30,5 @@ __all__ = [
     "ProductCategory",
     "VisualAnalysis",
     "ComplianceRun",
+    "NutritionAnalysis",
 ]
