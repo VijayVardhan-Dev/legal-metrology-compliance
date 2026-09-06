@@ -28,6 +28,41 @@ NUTRIENT_ORDER = [
     "Carbohydrates", "Total Sugars", "Added Sugars", "Dietary Fibre", "Sodium", "Salt",
 ]
 
+MAX_NUTRIENT_VALUES = {
+    "Energy": 10000,
+    "Protein": 100,
+    "Total Fat": 100,
+    "Saturated Fat": 100,
+    "Trans Fat": 100,
+    "Carbohydrates": 100,
+    "Total Sugars": 100,
+    "Added Sugars": 100,
+    "Dietary Fibre": 100,
+    "Salt": 100,
+    "Sodium": 10000,
+}
+
+OCR_LABEL_ALIASES = {
+    "energy": r"energy|enerqy|energv",
+    "calories": r"calories|calorles",
+    "protein": r"protein|pr0tein",
+    "total fat": r"total\s+fat|t0tal\s+fat",
+    "fat": r"fat",
+    "saturated fat": r"saturated\s+fat|saturatcd\s+fat",
+    "trans fat": r"trans\s+fat|trans\s+fat",
+    "carbohydrate": r"carbohydrate[s]?|carbohvdrate[s]?",
+    "carbohydrates": r"carbohydrate[s]?|carbohvdrate[s]?",
+    "total sugars": r"total\s+sugars?|t0tal\s+sugars?",
+    "sugars": r"sugars?|sugarl",
+    "added sugars": r"added\s+sugars?",
+    "dietary fibre": r"dietary\s+fibr(?:e|a)|dietary\s+fiber",
+    "dietary fiber": r"dietary\s+fibr(?:e|a)|dietary\s+fiber",
+    "fibre": r"fibr(?:e|a)",
+    "fiber": r"fiber",
+    "sodium": r"sodium|sodlum",
+    "salt": r"salt|sait",
+}
+
 ALLERGENS = {
     "milk": "Milk", "whey": "Milk", "casein": "Milk", "lactose": "Milk",
     "wheat": "Wheat/gluten", "gluten": "Wheat/gluten", "barley": "Wheat/gluten", "rye": "Wheat/gluten",
@@ -38,14 +73,17 @@ ALLERGENS = {
 
 
 def _lines(text: str) -> list[str]:
-    return [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
+    return [re.sub(r"\s+", " ", line).strip() for line in text.replace("|", "\n").splitlines() if line.strip()]
 
 
 def detect_sections(text: str) -> dict[str, Any]:
     lines = _lines(text)
     lowered = [line.lower() for line in lines]
     nutrition_indexes = [i for i, line in enumerate(lowered) if any(
-        marker in line for marker in ("nutrition information", "nutrition facts", "nutritional information", "per 100")
+        marker in line for marker in (
+            "nutrition information", "nutrition facts", "nutritional information",
+            "nutritional info", "nutrition info", "per 100 g", "per 100g", "per 100 ml", "per 100ml",
+        )
     )]
     ingredient_indexes = [i for i, line in enumerate(lowered) if re.search(r"\bingredients?\b", line)]
     allergen_indexes = [i for i, line in enumerate(lowered) if any(
@@ -59,7 +97,22 @@ def detect_sections(text: str) -> dict[str, Any]:
     nutrition_end = min(
         [index for index in ingredient_indexes + allergen_indexes if nutrition_start is not None and index > nutrition_start] or [len(lines)]
     )
-    nutrition_lines = lines[nutrition_start:nutrition_end] if nutrition_start is not None else []
+    if nutrition_start is not None:
+        nutrition_lines = lines[nutrition_start:nutrition_end]
+    else:
+        # OCR often omits the panel heading. Use the text before the ingredient
+        # section only when it contains at least one recognizable nutrient label.
+        ingredient_boundary = ingredient_start if ingredient_start is not None else len(lines)
+        candidate_lines = lines[:ingredient_boundary]
+        if ingredient_start == 0:
+            inline_ingredients = re.split(r"\bingredients?\s*[:\-]?", lines[0], maxsplit=1, flags=re.I)
+            candidate_lines = [inline_ingredients[0].strip()] if inline_ingredients[0].strip() else []
+        candidate_text = " ".join(candidate_lines).lower()
+        has_nutrient_label = any(
+            re.search(rf"\b{re.escape(label)}\b", candidate_text)
+            for label in KNOWN_NUTRIENTS
+        )
+        nutrition_lines = candidate_lines if has_nutrient_label else []
     ingredient_lines = lines[ingredient_start:ingredient_end] if ingredient_start is not None else []
     return {
         "nutrition_text": " ".join(nutrition_lines),
@@ -77,11 +130,27 @@ def _basis(text: str) -> str:
 
 
 def _value_match(text: str, label: str) -> re.Match[str] | None:
+    label_pattern = OCR_LABEL_ALIASES.get(label, re.escape(label))
     return re.search(
-        rf"\b{re.escape(label)}\b\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(kcal|kj|g|mg|µg|ug|ml|%)?",
+        rf"\b(?:{label_pattern})\b\s*(?:\((kcal|kj|kJ|g|mg|µg|ug|ml|%)\))?\s*[:\-]?\s*(?:(?:per|for)\s+(?:100\s*(?:g|ml)|serving|package)\s*)?(?:=\s*)?(\d+(?:[.,]\d+)?)\s*(kcal|kj|kJ|g|mg|µg|ug|ml|%)?",
         text,
         re.I,
     )
+
+
+def _is_plausible(label: str, value: str, unit: str) -> bool:
+    try:
+        numeric_value = float(value.replace(",", "."))
+    except ValueError:
+        return False
+    maximum = MAX_NUTRIENT_VALUES.get(label)
+    if maximum is None or numeric_value <= maximum:
+        return numeric_value >= 0
+    # Values over 100 g per 100 g are invalid for gram-based nutrients. A
+    # larger sodium value can be valid when explicitly expressed in mg.
+    if label == "Sodium" and unit.lower() == "mg":
+        return numeric_value <= 10000
+    return False
 
 
 def parse_nutrition(text: str, ocr_confidence: float | None) -> tuple[dict[str, dict[str, Any]], float]:
@@ -94,9 +163,12 @@ def parse_nutrition(text: str, ocr_confidence: float | None) -> tuple[dict[str, 
             continue
         match = _value_match(source, key)
         if match:
-            unit = match.group(2) or default_unit
+            unit = match.group(3) or match.group(1) or "Not detected"
+            value = match.group(2).replace(",", ".")
+            if not _is_plausible(label, value, unit):
+                continue
             nutrition[label] = {
-                "value": match.group(1).replace(",", "."),
+                "value": value,
                 "unit": unit,
                 "basis": _basis(source),
                 "confidence": round(min(1.0, (ocr_confidence or 0.5) * 0.95), 3),
@@ -106,7 +178,10 @@ def parse_nutrition(text: str, ocr_confidence: float | None) -> tuple[dict[str, 
         nutrition.setdefault(label, {
             "value": "Not detected", "unit": "", "basis": "Not detected", "confidence": 0.0,
         })
-    confidence = round((found / len(NUTRIENT_ORDER)) * (ocr_confidence or 0.5), 3) if source else 0.0
+    # Completeness is separate from extraction confidence: a label may not
+    # declare every optional nutrient, so missing rows must not lower the
+    # confidence of values that were actually read.
+    confidence = round((ocr_confidence or 0.5) * (0.75 + min(found / 4, 1) * 0.25), 3) if found else 0.0
     return nutrition, confidence
 
 

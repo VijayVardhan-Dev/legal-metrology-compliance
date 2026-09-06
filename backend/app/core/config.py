@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     STORAGE_PATH: str = "storage"
     MAX_UPLOAD_SIZE_MB: int = 10
 
+    # Optional NLP enrichment. Nutrition extraction never depends on Gemini.
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-2.0-flash-lite"
+
 
 
 # Singleton instance used throughout the application

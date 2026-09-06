@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 const NAV_ITEMS = [
   { to: '/',             label: 'Dashboard',    icon: '⌂' },
   { to: '/inspections/new', label: 'New inspection', icon: '+' },
+  { to: '/nutrition',    label: 'Nutrition',    icon: '✦' },
   { to: '/inspections',  label: 'Inspections',  icon: '≡' },
   { to: '/reports',      label: 'Reports',      icon: '▤' },
 ];

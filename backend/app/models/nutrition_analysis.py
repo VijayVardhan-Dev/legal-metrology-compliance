@@ -29,6 +29,11 @@ class NutritionAnalysis(Base):
     insights: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     sections: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     warnings: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    barcode: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    product_database: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    source_comparison: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    suitability: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    nlp_analysis: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

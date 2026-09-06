@@ -19,6 +19,11 @@ class NutritionAnalysisResponse(BaseModel):
     insights: list[str] = []
     sections: dict[str, Any] = {}
     warnings: list[str] = []
+    barcode: str | None = None
+    product_database: dict[str, Any] = {}
+    source_comparison: list[dict[str, Any]] = []
+    suitability: dict[str, Any] = {}
+    nlp_analysis: dict[str, Any] = {}
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -42,6 +47,11 @@ class NutritionAnalysisResponse(BaseModel):
             insights=obj.insights or [],
             sections=obj.sections or {},
             warnings=obj.warnings or [],
+            barcode=obj.barcode,
+            product_database=obj.product_database or {},
+            source_comparison=obj.source_comparison or [],
+            suitability=obj.suitability or {},
+            nlp_analysis=obj.nlp_analysis or {},
             error_message=obj.error_message,
             created_at=obj.created_at,
             updated_at=obj.updated_at,

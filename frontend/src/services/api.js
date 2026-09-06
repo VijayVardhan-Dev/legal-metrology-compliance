@@ -137,6 +137,13 @@ export const api = {
   getOcr: (id) =>
     request(`/api/v1/inspections/${id}/ocr`),
 
+  // --- Nutrition & ingredients ------------------------------------------
+  analyzeNutrition: (id) =>
+    request(`/api/v1/inspections/${id}/nutrition-analysis`, { method: 'POST' }),
+
+  getNutrition: (id) =>
+    request(`/api/v1/inspections/${id}/nutrition-analysis`),
+
   // --- Declarations -------------------------------------------------------
   triggerDeclarations: (id) =>
     request(`/api/v1/inspections/${id}/declarations`, { method: 'POST' }),
