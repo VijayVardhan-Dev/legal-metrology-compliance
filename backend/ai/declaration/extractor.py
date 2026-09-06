@@ -61,7 +61,7 @@ class DeclarationExtractor:
             following = self._following_text(region_list, index)
 
             combined = self._extract_spatial_labelled(
-                region_list, index, proximity_threshold
+                region_list, index, proximity_threshold, consumed_ids
             )
             if combined:
                 declaration, ids = combined
@@ -125,7 +125,7 @@ class DeclarationExtractor:
             )
         )
         declarations.extend(self._extract_spatial_consumer_care(region_list, consumed_ids))
-        return self._deduplicate(declarations)
+        return self._remove_redundant_incomplete(self._deduplicate(declarations))
 
     def _extract_mrp(self, text, following, confidence, region_id):
         match = MRP_PATTERN.search(text)
@@ -160,7 +160,7 @@ class DeclarationExtractor:
             ocr_text_region_id=region_id,
         )
 
-    def _extract_spatial_labelled(self, regions, index, threshold):
+    def _extract_spatial_labelled(self, regions, index, threshold, consumed_ids):
         if not self._has_geometry(regions[index]):
             return None
         text = str(getattr(regions[index], "text", "") or "").strip()
@@ -168,7 +168,7 @@ class DeclarationExtractor:
         if compact in {"mrp", "maximumretailprice"}:
             return self._spatial_mrp(regions, index, threshold)
         if compact in {"batch", "lot", "bno"} or compact.startswith(("batch", "lot")):
-            return self._spatial_batch(regions, index, threshold)
+            return self._spatial_batch(regions, index, threshold, consumed_ids)
         if compact in {"manufactured", "manufacturing"}:
             return self._spatial_manufacturer(regions, index, threshold)
         if compact in {"mfg", "mfd"}:
@@ -177,7 +177,9 @@ class DeclarationExtractor:
             return self._spatial_date(regions, index, threshold, "BEST_BEFORE")
         if compact in {"use", "useby", "expiry", "expirydate", "exp", "expdate"}:
             return self._spatial_date(regions, index, threshold, "USE_BY")
-        if compact in {"net", "netwt", "netweight"}:
+        if compact in {"net", "netwt", "netweight"} or (
+            compact.startswith("net") and any(token in compact for token in ("wt", "weight", "qty", "quantity"))
+        ):
             return self._spatial_quantity(regions, index, threshold)
         if compact in {"product", "of"}:
             return self._spatial_country(regions, index, threshold)
@@ -208,8 +210,16 @@ class DeclarationExtractor:
         )
         return declaration, {self._region_id(item) for item in items}
 
-    def _spatial_batch(self, regions, index, threshold):
-        candidates = self._nearby(regions, index, threshold)
+    def _spatial_batch(self, regions, index, threshold, consumed_ids):
+        candidates = [
+            item for item in self._nearby(regions, index, threshold)
+            if self._region_id(item) not in consumed_ids
+        ]
+        same_line = [item for item in candidates if self._same_line(regions[index], item)]
+        candidates = same_line or [
+            item for item in candidates
+            if self._vertical_gap(regions[index], item) <= max(self._bbox(regions[index])[3], 20)
+        ]
         value = next(
             (item for item in candidates if re.fullmatch(
                 r"[A-Za-z0-9][A-Za-z0-9./_-]*", str(getattr(item, "text", "")).strip()
@@ -234,7 +244,32 @@ class DeclarationExtractor:
         return declaration, {self._region_id(item) for item in items}
 
     def _spatial_date(self, regions, index, threshold, declaration_type):
-        candidates = self._nearby(regions, index, threshold)
+        candidates = [
+            item for item in regions
+            if item is not regions[index] and self._same_line(regions[index], item)
+        ]
+        if not candidates:
+            candidates = self._nearby(regions, index, threshold)
+        compact_date = next(
+            (item for item in candidates if DATE_PATTERN.fullmatch(
+                re.sub(r"[^A-Za-z0-9./-]", "", str(getattr(item, "text", "")))
+            )),
+            None,
+        )
+        if compact_date:
+            source, items = self._source_and_items(regions, index, [compact_date])
+            value = str(getattr(compact_date, "text", "")).strip().upper()
+            return ExtractedDeclaration(
+                declaration_type=declaration_type,
+                value=value,
+                normalized_value=value,
+                source_text=source,
+                confidence=self._combined_confidence(items),
+                ocr_confidence=self._combined_confidence(items),
+                extraction_method="COMBINED",
+                ocr_text_region_id=self._region_id(regions[index]),
+                ocr_text_region_ids=[self._region_id(item) for item in items],
+            ), {self._region_id(item) for item in items}
         numbers = [item for item in candidates if re.fullmatch(r"\d{1,4}", str(getattr(item, "text", "")).strip())]
         month = next(
             (item for item in candidates if compact_text(str(getattr(item, "text", "")))[:3] in
@@ -244,7 +279,9 @@ class DeclarationExtractor:
         day = next((item for item in numbers if len(str(getattr(item, "text", "")).strip()) <= 2), None)
         year = next((item for item in numbers if len(str(getattr(item, "text", "")).strip()) == 4), None)
         if not month or not day or not year:
-            return self._make_incomplete(declaration_type, regions[index])
+            # Let the normal labelled-text extractor try the complete OCR line
+            # before reporting an incomplete declaration.
+            return None
         label_items = [
             item for item in candidates
             if compact_text(str(getattr(item, "text", ""))) in {
@@ -276,6 +313,11 @@ class DeclarationExtractor:
 
     def _spatial_quantity(self, regions, index, threshold):
         candidates = self._nearby(regions, index, threshold)
+        same_line = [item for item in candidates if self._same_line(regions[index], item)]
+        candidates = same_line or [
+            item for item in candidates
+            if self._vertical_gap(regions[index], item) <= max(self._bbox(regions[index])[3], 20)
+        ]
         number = next((item for item in candidates if re.fullmatch(
             r"\d+(?:[.,]\d+)?", str(getattr(item, "text", "")).strip()
         )), None)
@@ -335,6 +377,11 @@ class DeclarationExtractor:
         _, ay, _, ah = self._bbox(first)
         _, by, _, bh = self._bbox(second)
         return abs((by + bh / 2) - (ay + ah / 2)) <= max(ah, bh, 20)
+
+    def _vertical_gap(self, first, second):
+        _, ay, _, ah = self._bbox(first)
+        _, by, _, _ = self._bbox(second)
+        return max(0, by - (ay + ah))
 
     def _spatial_manufacturer(self, regions, index, threshold):
         candidates = self._nearby(regions, index, threshold)
@@ -564,7 +611,22 @@ class DeclarationExtractor:
             combined = following
         if declaration_type in {"BEST_BEFORE", "USE_BY"}:
             value_match = RELATIVE_DATE_PATTERN.search(combined) or DATE_PATTERN.search(combined)
-            value = value_match.group(0) if value_match else (combined or None)
+            compact_combined = compact_text(combined)
+            compact_relative = re.search(
+                r"\d+(?:months?|years?|days?)fromthedateofpacking",
+                compact_combined,
+                re.IGNORECASE,
+            )
+            relative_period = (
+                declaration_type == "BEST_BEFORE"
+                and re.search(r"\b\d+\s+(?:months?|years?|days?)\b", combined, re.IGNORECASE)
+            )
+            value = (
+                value_match.group(0)
+                if value_match
+                else combined.strip(" \"'") if compact_relative or relative_period
+                else None
+            )
         elif declaration_type == "CONSUMER_CARE":
             value = self._contact_value(combined or text)
         else:
@@ -588,7 +650,14 @@ class DeclarationExtractor:
             r"(?i)(?:\+?\d[\d\s()./-]{7,}\d|[\w.+-]+@[\w.-]+\.[a-z]{2,})",
             text,
         )
-        return " / ".join(match.strip() for match in matches) or None
+        normalized = []
+        for match in matches:
+            value = match.strip()
+            # PaddleOCR can drop the leading "i" in a clearly labelled email.
+            if value.lower().startswith("nfo@"):
+                value = "i" + value
+            normalized.append(value)
+        return " / ".join(normalized) or None
 
     @staticmethod
     def _following_text(regions, index) -> str:
@@ -623,12 +692,15 @@ class DeclarationExtractor:
                     break
             if len(group) > 1:
                 source_text = " ".join(str(getattr(item, "text", "")).strip() for item in group)
+                value = re.split(r"(?i)\bstore\s+in\b", source_text, maxsplit=1)[0].strip()
+                if not value:
+                    continue
                 confidence = DeclarationExtractor._combined_confidence(group)
                 return [
                     ExtractedDeclaration(
                         declaration_type="PRODUCT_NAME",
-                        value=source_text,
-                        normalized_value=compact_text(source_text),
+                        value=value,
+                        normalized_value=compact_text(value),
                         source_text=source_text,
                         confidence=confidence,
                         ocr_confidence=confidence,
@@ -673,6 +745,22 @@ class DeclarationExtractor:
                 )
             ]
         return []
+
+    @staticmethod
+    def _remove_redundant_incomplete(declarations):
+        found_types = {
+            declaration.declaration_type
+            for declaration in declarations
+            if declaration.status == "FOUND" and declaration.value
+        }
+        return [
+            declaration
+            for declaration in declarations
+            if not (
+                declaration.status == "INCOMPLETE"
+                and declaration.declaration_type in found_types
+            )
+        ]
 
     def _spatial_consumer_care(self, regions, index, threshold):
         candidates = self._nearby(regions, index, threshold)

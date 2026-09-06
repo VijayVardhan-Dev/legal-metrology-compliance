@@ -50,6 +50,114 @@ def test_quantity_formats_and_units():
         assert (declaration.value, declaration.unit) == expected
 
 
+def test_noisy_label_and_month_name_date_are_recovered():
+    extractor = DeclarationExtractor()
+    extracted = extractor.extract_regions(
+        spatial_regions(
+            ("Net Wt.C", 10, 10, 60, 18, 0.91),
+            ("500", 80, 10, 30, 18, 0.99),
+            ("g", 118, 10, 12, 18, 0.99),
+            ("Mfg. Date :15 SEP 2024", 10, 50, 180, 18, 0.96),
+        )
+    )
+    quantity = by_type(extracted, "NET_QUANTITY")
+    manufacturing_date = by_type(extracted, "MANUFACTURING_DATE")
+    assert (quantity.value, quantity.unit, quantity.status) == ("500", "g", "FOUND")
+    assert manufacturing_date.value == "15 SEP 2024"
+    assert manufacturing_date.status == "FOUND"
+
+
+def test_missing_initial_i_in_email_is_repaired_when_contact_is_labelled():
+    extracted = DeclarationExtractor().extract_regions(
+        regions("Consumer Care Email: nfo@suryamasale.com")
+    )
+    assert by_type(extracted, "CONSUMER_CARE").value == "info@suryamasale.com"
+
+
+def test_label_only_incomplete_is_removed_when_quantity_was_found():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Net Wt.C", 10, 10, 60, 18, 0.91),
+            ("500", 80, 10, 30, 18, 0.99),
+            ("g", 118, 10, 12, 18, 0.99),
+        )
+    )
+    quantities = [item for item in extracted if item.declaration_type == "NET_QUANTITY"]
+    assert len(quantities) == 1
+    assert quantities[0].value == "500"
+
+
+def test_batch_does_not_reuse_consumed_mrp_value():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("MRP", 10, 10, 35, 18, 0.98),
+            ("100.00", 52, 10, 48, 18, 0.97),
+            ("Batch", 10, 50, 42, 18, 0.98),
+        )
+    )
+    batch = by_type(extracted, "BATCH_LOT_NUMBER")
+    assert batch.value is None
+    assert batch.status == "INCOMPLETE"
+
+
+def test_batch_code_is_selected_on_same_line():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("MRP", 10, 10, 35, 18, 0.98),
+            ("100.00", 52, 10, 48, 18, 0.97),
+            ("Batch No.", 10, 50, 60, 18, 0.98),
+            ("SMW/0924", 80, 50, 75, 18, 0.96),
+        )
+    )
+    assert by_type(extracted, "BATCH_LOT_NUMBER").value == "SMW/0924"
+
+
+def test_quantity_does_not_borrow_number_from_next_line():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Net Wt.", 10, 10, 60, 18, 0.98),
+            ("100.00", 10, 50, 48, 18, 0.97),
+        )
+    )
+    quantities = [item for item in extracted if item.declaration_type == "NET_QUANTITY"]
+    assert not any(item.value == "100.00" for item in quantities)
+
+
+def test_product_name_stops_before_storage_instruction():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("MS.", 10, 10, 30, 18, 0.96),
+            ("Hyderabad", 48, 10, 75, 18, 0.95),
+            ("Food", 126, 10, 35, 18, 0.94),
+            ("Store in a cool, dry place", 164, 10, 180, 18, 0.93),
+        )
+    )
+    assert by_type(extracted, "PRODUCT_NAME").value == "MS. Hyderabad Food"
+
+
+def test_best_before_compact_date_is_found():
+    extracted = DeclarationExtractor().extract_regions(
+        regions("Best Before: 14SEP2026")
+    )
+    best_before = by_type(extracted, "BEST_BEFORE")
+    assert best_before.value == "14SEP2026"
+    assert best_before.status == "FOUND"
+
+
+def test_best_before_split_ocr_tokens_are_found_on_same_line():
+    extracted = DeclarationExtractor().extract_regions(
+        spatial_regions(
+            ("Best Before:", 10, 10, 80, 18, 0.96),
+            ("14", 100, 10, 18, 18, 0.95),
+            ("SEP", 124, 10, 30, 18, 0.95),
+            ("2026", 160, 10, 42, 18, 0.95),
+        )
+    )
+    best_before = by_type(extracted, "BEST_BEFORE")
+    assert best_before.value == "14 SEP 2026"
+    assert best_before.status == "FOUND"
+
+
 def test_manufacturer_dates_batch_and_consumer_care():
     extracted = DeclarationExtractor().extract_regions(
         regions(

@@ -121,17 +121,16 @@ class ComplianceEngine:
             )
         if rule.rule_id == "LM-PC-009":
             unit_sale = self._usable(by_type.get("UNIT_SALE_PRICE", []))
-            quantity = self._usable(by_type.get("NET_QUANTITY", []))
-            if unit_sale and quantity:
+            if unit_sale:
                 return Evaluation(
                     rule, "REVIEW_REQUIRED",
                     "A unit-sale-price label was detected, but its legal basis and format require rule-specific verification.",
-                    [*unit_sale, *quantity],
+                    unit_sale,
                 )
             return Evaluation(
-                rule, "REVIEW_REQUIRED",
-                "Unit-sale-price applicability and required unit basis cannot be determined from the available package/context data.",
-                quantity,
+                rule, "NOT_APPLICABLE",
+                "No separate unit-sale-price declaration was detected. The package MRP is evaluated under LM-PC-005.",
+                [],
             )
         if rule.rule_id == "LM-PC-010":
             return self._origin_rule(rule, by_type)
@@ -147,8 +146,8 @@ class ComplianceEngine:
             best_before = self._usable(by_type.get("BEST_BEFORE", []))
             if best_before:
                 return Evaluation(
-                    rule, "REVIEW_REQUIRED",
-                    "BEST_BEFORE was detected, but it is not treated as equivalent to USE_BY/expiry by this engine.",
+                    rule, "COMPLIANT",
+                    "A best-before date was detected and is accepted as the package expiry date.",
                     best_before,
                 )
             if by_type.get("USE_BY"):

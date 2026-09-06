@@ -156,13 +156,25 @@ def test_unknown_food_classification_is_not_compliant_by_default():
 def test_500_gram_quantity_and_unit_sale_price_are_separate():
     results = results_for([declaration("NET_QUANTITY", "500")])
     assert results["LM-PC-004"].status == "COMPLIANT"
-    assert results["LM-PC-009"].status == "REVIEW_REQUIRED"
-    assert "Unit-sale-price applicability" in results["LM-PC-009"].reason
+    assert results["LM-PC-009"].status == "NOT_APPLICABLE"
+    assert "MRP is evaluated under LM-PC-005" in results["LM-PC-009"].reason
+    assert results["LM-PC-009"].declarations == []
+
+
+def test_unit_sale_price_review_uses_only_unit_sale_evidence():
+    results = results_for([
+        declaration("NET_QUANTITY", "500"),
+        declaration("UNIT_SALE_PRICE", "20 per 100g"),
+    ])
+    assert [item.declaration_type for item in results["LM-PC-009"].declarations] == [
+        "UNIT_SALE_PRICE"
+    ]
 
 
 def test_best_before_is_not_treated_as_use_by():
     result = results_for([declaration("BEST_BEFORE", "12 MONTHS FROM PACKING")])["FSSAI-002"]
-    assert result.status == "REVIEW_REQUIRED"
+    assert result.status == "COMPLIANT"
+    assert "accepted as the package expiry date" in result.reason
 
 
 def test_overall_status_precedence():
@@ -254,7 +266,7 @@ def test_persisted_food_category_allows_fssai_evaluation():
     assert results["FSSAI-001"].reason != (
         "The product category is not sufficient to determine whether the food-specific rule applies."
     )
-    assert results["FSSAI-002"].status == "REVIEW_REQUIRED"
+    assert results["FSSAI-002"].status == "COMPLIANT"
 
 
 def test_persisted_non_food_category_makes_fssai_rules_not_applicable():

@@ -40,3 +40,7 @@ docs/reference.pdf
 storage/uploads/*
 storage/evidence/*
 storage/reports/*
+
+# Runtime-generated files
+backend/storage/uploads/
+backend/storage/reports/

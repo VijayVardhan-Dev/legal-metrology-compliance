@@ -32,7 +32,14 @@ STANDALONE_QUANTITY_PATTERN = re.compile(
     r"\b"
 )
 DATE_PATTERN = re.compile(
-    r"(?i)(\d{1,2}(?:[./-]\d{1,2})?[./-]\d{2,4}|\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2})"
+    r"(?i)(\d{1,2}(?:[./-]\d{1,2})?[./-]\d{2,4}|"
+    r"\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}|"
+    r"\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|"
+    r"may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|"
+    r"nov(?:ember)?|dec(?:ember)?)\s+\d{2,4}|"
+    r"\d{1,2}(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|"
+    r"may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|"
+    r"nov(?:ember)?|dec(?:ember)?)\d{2,4})"
 )
 RELATIVE_DATE_PATTERN = re.compile(
     r"(?i)\b\d+\s+(?:months?|years?|days?)\s+from\s+the\s+date\s+of\s+packing\b"
