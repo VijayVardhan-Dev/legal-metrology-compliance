@@ -27,3 +27,5 @@ class DeclarationResponse(BaseModel):
 class DeclarationListResponse(BaseModel):
     inspection_id: str
     declarations: list[DeclarationResponse]
+    extraction_method: str | None = None
+    fallback_used: bool = False

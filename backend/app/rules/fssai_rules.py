@@ -14,10 +14,10 @@ FSSAI_RULES = [
     ),
     RuleDefinition(
         "FSSAI-002", "FSSAI", "FSS (Labelling and Display) Regulations 2020",
-        "Declare an expiry or use-by date for food.",
+        "Declare an expiry, use-by, or best-before date for food.",
         {"requires": ["food_commodity"]}, [], "USE_BY", "EXPIRY_USE_BY", "HIGH", "2020",
-        FSSAI_SOURCE, "BEST_BEFORE is not automatically treated as USE_BY.",
-        "Expiry / Use-by Date", "food_date", "Expiry or use-by date.",
+        FSSAI_SOURCE, "Best before, use by, or expiry date satisfies this requirement.",
+        "Expiry / Use-by / Best-before Date", "food_date", "Expiry, use-by, or best-before date.",
     ),
     RuleDefinition(
         "FSSAI-003", "FSSAI", "FSS (Labelling and Display) Regulations 2020",

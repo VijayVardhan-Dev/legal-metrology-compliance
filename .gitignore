@@ -16,6 +16,8 @@ backend/venv/
 # Environment variables
 .env
 .env.*
+!.env.example
+!**/.env.example
 
 # Docker
 *.log
@@ -40,3 +42,6 @@ docs/reference.pdf
 storage/uploads/*
 storage/evidence/*
 storage/reports/*
+backend/storage/uploads/*
+backend/storage/evidence/*
+backend/storage/reports/*

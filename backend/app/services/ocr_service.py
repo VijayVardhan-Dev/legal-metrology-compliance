@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from app.models.inspection import Inspection
 from app.models.evidence import Evidence
+from app.models.declaration import Declaration
 from app.models.ocr_result import OCRResult
 from app.models.ocr_text_region import OCRTextRegion
 from app.schemas.ocr import OCRResultResponse
@@ -53,8 +54,9 @@ class OCRService:
             ocr_result = OCRResult(inspection_id=inspection_id, status="PENDING")
             self.db.add(ocr_result)
         else:
-            # Clear old text regions if re-running
-            self.db.query(OCRTextRegion).filter(OCRTextRegion.ocr_result_id == ocr_result.id).delete()
+            # Clear old declarations and text regions if re-running
+            self.db.query(Declaration).filter(Declaration.inspection_id == inspection_id).delete(synchronize_session=False)
+            self.db.query(OCRTextRegion).filter(OCRTextRegion.ocr_result_id == ocr_result.id).delete(synchronize_session=False)
             ocr_result.status = "PENDING"
             ocr_result.error_message = None
 

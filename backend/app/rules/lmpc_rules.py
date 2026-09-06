@@ -47,13 +47,6 @@ LMPC_RULES = [
         "Consumer Care Information", "consumer_care", "Consumer care information.",
     ),
     RuleDefinition(
-        "LM-PC-009", "LMPC", "Rule 6(11)", "Evaluate unit sale price only when its applicability and basis are determinable.",
-        {"requires": ["unit_sale_price_applicability", "net_quantity_basis"]}, [], "UNIT_SALE_PRICE",
-        "CONTEXTUAL", "MEDIUM", "2011", LMPC_SOURCE,
-        "The MVP does not infer a unit-sale-price failure from MRP and quantity alone.",
-        "Unit Sale Price", "unit_sale_price", "Unit sale price.",
-    ),
-    RuleDefinition(
         "LM-PC-010", "LMPC", "Rule 6(1)(aa)", "Declare country of origin for imported commodities.",
         {"requires": ["import_status"]}, [], "COUNTRY_OF_ORIGIN", "IMPORTED_ONLY", "HIGH", "2011",
         LMPC_SOURCE, "Domestic goods do not fail solely because origin is absent.",

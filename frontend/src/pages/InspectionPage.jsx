@@ -27,12 +27,32 @@ export default function InspectionPage() {
 
   const [state, setState] = useState({});
   const [processing, setProcessing] = useState(shouldRun);
+  const [reextracting, setReextracting] = useState(false);
   const [error, setError] = useState('');
   const [evidence, setEvidence] = useState(null);
 
   const update = useCallback((key, value) => {
     setState((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  async function handleReextract() {
+    setReextracting(true);
+    setError('');
+    try {
+      if (!state.ocr) {
+        const ocrData = await api.triggerOcr(id);
+        update('ocr', ocrData);
+      }
+      const decls = await api.triggerDeclarations(id);
+      update('declarations', decls);
+      const comp = await api.triggerCompliance(id);
+      update('compliance', comp);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setReextracting(false);
+    }
+  }
 
   // Main analysis workflow
   useEffect(() => {
@@ -161,6 +181,13 @@ export default function InspectionPage() {
         <button className="btn" onClick={() => navigate('/inspections')}>
           ← Back to history
         </button>
+        <button
+          className="btn btn-primary"
+          onClick={handleReextract}
+          disabled={reextracting || processing}
+        >
+          {reextracting ? 'Extracting VLM...' : 'Run VLM Extraction'}
+        </button>
       </PageHeader>
 
       {/* Step indicator */}
@@ -222,8 +249,28 @@ export default function InspectionPage() {
         <section className="card">
           <div className="card-header">
             <div className="card-header-text">
-              <p className="eyebrow">DETECTED DECLARATIONS</p>
-              <h2>Label data</h2>
+              <p className="eyebrow">DECLARATION EXTRACTION</p>
+              <h2>Extracted Declarations</h2>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {state.declarations?.extraction_method && (
+                <span className={`status-badge ${state.declarations.fallback_used || state.declarations.extraction_method === 'SPATIAL_FALLBACK' ? 'status-review-required' : 'status-compliant'}`}>
+                  Method: {state.declarations.extraction_method}
+                </span>
+              )}
+              {state.declarations?.fallback_used && (
+                <span className="status-badge status-review-required">
+                  ⚠️ Spatial Fallback Used
+                </span>
+              )}
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleReextract}
+                disabled={reextracting || processing}
+                style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+              >
+                {reextracting ? 'Extracting VLM...' : 'Re-extract with VLM'}
+              </button>
             </div>
           </div>
           <DeclarationTable items={state.declarations?.declarations || []} />
@@ -352,7 +399,7 @@ export default function InspectionPage() {
 // --- Declaration Table ---------------------------------------------------
 function DeclarationTable({ items }) {
   if (!items.length) {
-    return <EmptyState>Declarations will appear after OCR.</EmptyState>;
+    return <EmptyState>Declarations will appear after extraction.</EmptyState>;
   }
 
   return (
@@ -360,22 +407,38 @@ function DeclarationTable({ items }) {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Declaration</th>
+            <th>Field</th>
             <th>Value</th>
+            <th>Evidence</th>
             <th>Confidence</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
           {items.map((d) => (
             <tr key={d.id}>
               <td>
-                <span className="cell-primary">
+                <span className="cell-primary" style={{ fontWeight: 600 }}>
                   {prettify(d.field_name || d.declaration_type)}
                 </span>
-                <span className="cell-secondary">{d.source_text}</span>
               </td>
-              <td>{d.value || '—'} {d.unit || ''}</td>
+              <td>{d.value || '—'}{d.unit && d.value && d.value !== '—' ? ` ${d.unit}` : ''}</td>
+              <td style={{ maxWidth: '240px' }}>
+                <span
+                  className="cell-secondary"
+                  style={{
+                    fontStyle: d.source_text === '—' ? 'normal' : 'italic',
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {d.source_text ? (d.source_text === '—' ? '—' : `"${d.source_text}"`) : '—'}
+                </span>
+              </td>
               <td className="confidence">{formatPercent(d.confidence)}</td>
+              <td>
+                <StatusBadge status={d.status} />
+              </td>
             </tr>
           ))}
         </tbody>

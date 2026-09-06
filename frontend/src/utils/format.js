@@ -4,11 +4,18 @@ export function formatPercent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
-/** Replace underscores with spaces and title-case the first letter of each word. */
+/** Replace underscores with spaces and title-case words, preserving standard acronyms. */
 export function prettify(value) {
-  return String(value || '—')
+  if (!value) return '—';
+  const acronyms = { mrp: 'MRP', ocr: 'OCR', lmpc: 'LMPC', fssai: 'FSSAI', vlm: 'VLM' };
+  const lower = String(value).toLowerCase().trim();
+  if (acronyms[lower]) return acronyms[lower];
+  return String(value)
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => acronyms[word.toLowerCase()] || (word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
+    .join(' ');
 }
 
 /** Format an ISO date string to a locale-friendly short date. */

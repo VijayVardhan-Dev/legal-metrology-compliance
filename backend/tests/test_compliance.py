@@ -153,16 +153,15 @@ def test_unknown_food_classification_is_not_compliant_by_default():
     assert results["FSSAI-003"].status == "REVIEW_REQUIRED"
 
 
-def test_500_gram_quantity_and_unit_sale_price_are_separate():
+def test_500_gram_quantity_evaluates_compliant():
     results = results_for([declaration("NET_QUANTITY", "500")])
     assert results["LM-PC-004"].status == "COMPLIANT"
-    assert results["LM-PC-009"].status == "REVIEW_REQUIRED"
-    assert "Unit-sale-price applicability" in results["LM-PC-009"].reason
+    assert "LM-PC-009" not in results
 
 
-def test_best_before_is_not_treated_as_use_by():
+def test_best_before_satisfies_expiry_rule():
     result = results_for([declaration("BEST_BEFORE", "12 MONTHS FROM PACKING")])["FSSAI-002"]
-    assert result.status == "REVIEW_REQUIRED"
+    assert result.status == "COMPLIANT"
 
 
 def test_overall_status_precedence():
@@ -188,7 +187,7 @@ def test_no_fabricated_values():
 def test_seed_contains_all_mvp_rules():
     assert {rule.rule_id for rule in MVP_RULES} == {
         "LM-PC-001", "LM-PC-002", "LM-PC-003", "LM-PC-004",
-        "LM-PC-005", "LM-PC-008", "LM-PC-009", "LM-PC-010",
+        "LM-PC-005", "LM-PC-008", "LM-PC-010",
         "FSSAI-001", "FSSAI-002", "FSSAI-003",
     }
 
@@ -254,7 +253,7 @@ def test_persisted_food_category_allows_fssai_evaluation():
     assert results["FSSAI-001"].reason != (
         "The product category is not sufficient to determine whether the food-specific rule applies."
     )
-    assert results["FSSAI-002"].status == "REVIEW_REQUIRED"
+    assert results["FSSAI-002"].status == "COMPLIANT"
 
 
 def test_persisted_non_food_category_makes_fssai_rules_not_applicable():

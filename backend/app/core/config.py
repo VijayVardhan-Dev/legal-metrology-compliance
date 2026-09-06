@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     STORAGE_PATH: str = "storage"
     MAX_UPLOAD_SIZE_MB: int = 10
 
+    # VLM Extraction Configuration
+    VLM_PROVIDER: str = "gemini"
+    VLM_MODEL: str = "gemini-3.6-flash"
+    VLM_API_KEY: str | None = None
+    EXTRACTOR_MODE: str = "vlm"  # "vlm" | "spatial_fallback"
+    VLM_FALLBACK_ENABLED: bool = True
+    VLM_CONFIDENCE_VERIFIED: float = 0.85
+    VLM_CONFIDENCE_UNCERTAIN: float = 0.60
+    VLM_TIMEOUT_SECONDS: int = 30
+
 
 
 # Singleton instance used throughout the application

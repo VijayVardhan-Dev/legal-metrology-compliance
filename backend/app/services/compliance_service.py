@@ -119,20 +119,6 @@ class ComplianceEngine:
                 rule, by_type, ("CONSUMER_CARE",),
                 "Consumer-care information was not detected, but the available OCR/extraction evidence is insufficient to establish that it is absent.",
             )
-        if rule.rule_id == "LM-PC-009":
-            unit_sale = self._usable(by_type.get("UNIT_SALE_PRICE", []))
-            quantity = self._usable(by_type.get("NET_QUANTITY", []))
-            if unit_sale and quantity:
-                return Evaluation(
-                    rule, "REVIEW_REQUIRED",
-                    "A unit-sale-price label was detected, but its legal basis and format require rule-specific verification.",
-                    [*unit_sale, *quantity],
-                )
-            return Evaluation(
-                rule, "REVIEW_REQUIRED",
-                "Unit-sale-price applicability and required unit basis cannot be determined from the available package/context data.",
-                quantity,
-            )
         if rule.rule_id == "LM-PC-010":
             return self._origin_rule(rule, by_type)
         if rule.rule_id == "FSSAI-001":
@@ -141,23 +127,29 @@ class ComplianceEngine:
                 "No manufacture or packaging date declaration was extracted.",
             )
         if rule.rule_id == "FSSAI-002":
-            use_by = self._usable(by_type.get("USE_BY", []))
-            if use_by:
-                return Evaluation(rule, "COMPLIANT", "An expiry/use-by date was detected.", use_by)
-            best_before = self._usable(by_type.get("BEST_BEFORE", []))
-            if best_before:
+            expiry_candidates = [
+                i for decl_type in ("USE_BY", "BEST_BEFORE")
+                for i in by_type.get(decl_type, [])
+                if getattr(i, "status", None) != "MISSING"
+            ]
+            usable_expiry = self._usable(expiry_candidates)
+            if usable_expiry:
+                return Evaluation(
+                    rule, "COMPLIANT",
+                    "An expiry, use-by, or best-before date was detected.",
+                    usable_expiry,
+                )
+            if expiry_candidates:
                 return Evaluation(
                     rule, "REVIEW_REQUIRED",
-                    "BEST_BEFORE was detected, but it is not treated as equivalent to USE_BY/expiry by this engine.",
-                    best_before,
+                    "An expiry, use-by, or best-before date was detected, but its value is incomplete or unreadable.",
+                    expiry_candidates,
                 )
-            if by_type.get("USE_BY"):
-                return Evaluation(
-                    rule, "REVIEW_REQUIRED",
-                    "An expiry/use-by label was detected but its value is incomplete or unreadable.",
-                    by_type["USE_BY"],
-                )
-            return Evaluation(rule, "NON_COMPLIANT", "No expiry/use-by date declaration was extracted.", [])
+            return Evaluation(
+                rule, "NON_COMPLIANT",
+                "No expiry, use-by, or best-before date declaration was extracted.",
+                [],
+            )
         if rule.rule_id == "FSSAI-003":
             return self._presence_rule(
                 rule, by_type, ("BATCH_LOT_NUMBER",),
@@ -197,7 +189,10 @@ class ComplianceEngine:
 
     @staticmethod
     def _usable(items):
-        return [item for item in items if item.value and item.status == "FOUND"]
+        return [
+            item for item in items
+            if item.value and item.value != "—" and item.status == "FOUND"
+        ]
 
     @staticmethod
     def _related_declarations(rule, by_type):
@@ -205,17 +200,21 @@ class ComplianceEngine:
             types = ("MANUFACTURER", "PACKER", "IMPORTER")
         elif rule.rule_id == "FSSAI-001":
             types = ("MANUFACTURING_DATE", "PACKING_DATE")
+        elif rule.rule_id == "FSSAI-002":
+            types = ("USE_BY", "BEST_BEFORE")
         else:
             types = (rule.required_declaration,) if rule.required_declaration else ()
         return [
             item for declaration_type in types
             for item in by_type.get(declaration_type, [])
+            if getattr(item, "status", None) != "MISSING"
         ]
 
     def _presence_rule(self, rule, by_type, types, missing_reason):
         matching = [
             item for declaration_type in types
             for item in by_type.get(declaration_type, [])
+            if getattr(item, "status", None) != "MISSING"
         ]
         usable = self._usable(matching)
         if rule.rule_id == "LM-PC-008" and usable:
@@ -242,6 +241,7 @@ class ComplianceEngine:
         matching = [
             item for declaration_type in types
             for item in by_type.get(declaration_type, [])
+            if getattr(item, "status", None) != "MISSING"
         ]
         usable = self._usable(matching)
         if usable:
@@ -255,12 +255,16 @@ class ComplianceEngine:
         return Evaluation(rule, "NON_COMPLIANT", missing_reason, [])
 
     def _generic_name(self, rule, by_type):
-        product = self._usable(by_type.get("PRODUCT_NAME", []))
+        product_matching = [
+            i for i in by_type.get("PRODUCT_NAME", [])
+            if getattr(i, "status", None) != "MISSING"
+        ]
+        product = self._usable(product_matching)
         if not product:
             return Evaluation(
                 rule, "REVIEW_REQUIRED",
                 "No confident commodity-name declaration was extracted.",
-                by_type.get("PRODUCT_NAME", []),
+                product_matching,
             )
         if len(product[0].value.strip().split()) < 2:
             return Evaluation(
@@ -282,11 +286,15 @@ class ComplianceEngine:
                     "The commodity is treated as imported and a country-of-origin declaration was detected.",
                     [*importer, *origin],
                 )
-            if by_type.get("COUNTRY_OF_ORIGIN"):
+            country_matching = [
+                i for i in by_type.get("COUNTRY_OF_ORIGIN", [])
+                if getattr(i, "status", None) != "MISSING"
+            ]
+            if country_matching:
                 return Evaluation(
                     rule, "REVIEW_REQUIRED",
                     "The commodity is treated as imported, but the country-of-origin value is incomplete or unreadable.",
-                    [*importer, *by_type["COUNTRY_OF_ORIGIN"]],
+                    [*importer, *country_matching],
                 )
             return Evaluation(
                 rule, "NON_COMPLIANT",

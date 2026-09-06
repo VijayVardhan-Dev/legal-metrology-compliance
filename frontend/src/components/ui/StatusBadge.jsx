@@ -8,6 +8,9 @@ const STATUS_MAP = {
   COMPLETED: { className: 'status-completed', label: 'Completed' },
   FAILED: { className: 'status-failed', label: 'Failed' },
   APPLICABLE: { className: 'status-compliant', label: 'Applicable' },
+  FOUND: { className: 'status-compliant', label: 'FOUND' },
+  UNCERTAIN: { className: 'status-review-required', label: 'UNCERTAIN' },
+  MISSING: { className: 'status-non-compliant', label: 'MISSING' },
 };
 
 export default function StatusBadge({ status }) {
